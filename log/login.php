@@ -1,48 +1,30 @@
 <?php
-// log/login.php — no init.php here, to avoid redirect loop
-session_start();
+// /var/www/formazione/biosound/log/login.php
 
-// If already logged in, go to the app home
+// 1) Include init.php (sessione, security headers, PDO e redirect logic)
+require_once __DIR__ . '/../init.php';
+
+// 2) Se sei già loggato, vai alla home
 if (!empty($_SESSION['username'])) {
-    header('Location: /biosound/attivitae.php');
+    header('Location: /attivitae.php');
     exit;
-}
-
-// DB connection
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'biosound');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_CHARSET', 'utf8mb4');
-
-$dsn = "mysql:host=".DB_HOST.";dbname=".DB_NAME.";charset=".DB_CHARSET;
-$options = [
-  PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-  PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-];
-try {
-  $pdo = new PDO($dsn, DB_USER, DB_PASS, $options);
-} catch (PDOException $e) {
-  http_response_code(500);
-  exit('Errore di connessione al database.');
 }
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $u = trim($_POST['username'] ?? '');
     $p = $_POST['password'] ?? '';
+
     if ($u === '' || $p === '') {
         $error = 'Inserisci username e password.';
     } else {
-        // Recupera l’hash della password dal database
         $stmt = $pdo->prepare('SELECT username, password, role FROM user WHERE username = ?');
         $stmt->execute([$u]);
         $user = $stmt->fetch();
 
-        // Verifica la password con password_verify()
         if ($user && password_verify($p, $user['password'])) {
             $_SESSION['username'] = $user['username'];
-            $_SESSION['role']     = $user['role'];
+                        $_SESSION['role']     = $user['role'];
             session_regenerate_id(true);
             header('Location: /biosound/attivitae.php');
             exit;
@@ -66,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       padding: 0;
       background: linear-gradient(135deg, #0062E6, #33AEFF);
       min-height: 100vh;
-      display: flex;
+          display: flex;
       align-items: center;
       justify-content: center;
       font-family: 'Segoe UI', sans-serif;
@@ -91,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       margin-bottom: 1.5rem;
       color: #333;
     }
-    /* Rounded inputs */
+        /* Rounded inputs */
     .login-box .form-control {
       border-radius: 50px;
       padding: 0.75rem 1.25rem;
@@ -110,11 +92,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <h3>Accedi a Biosound</h3>
 
     <?php if ($error): ?>
-      <div class="alert alert-danger py-2"><?= htmlspecialchars($error, ENT_QUOTES) ?></div>
+      <div class="alert alert-danger py-2">
+        <?= htmlspecialchars($error, ENT_QUOTES) ?>
+      </div>
     <?php endif; ?>
 
     <form method="post" action="login.php" novalidate>
-      <div class="mb-3">
+           <div class="mb-3">
         <input
           type="text"
           name="username"
@@ -136,8 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <button type="submit" class="btn btn-primary w-100">Accedi</button>
     </form>
   </div>
-
-  <!-- Bootstrap JS Bundle -->
+   <!-- Bootstrap JS Bundle -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
