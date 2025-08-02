@@ -8,7 +8,7 @@ require_once __DIR__ . '/../init.php';
 if (!empty($_SESSION['username'])) {
     header('Location: /attivitae.php');
     exit;
-}
+} // a
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
