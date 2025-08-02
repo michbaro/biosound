@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <style>
+
+    /* --- margine inferiore maggiore per fare spazio al footer --- */
+/* lasciare spazio in fondo per il footer */
+@page {
+  margin: 1cm 1cm 2cm 1cm;  /* top right bottom left */
+}
+
+/* footer fisso e centrato in basso */
+.page-footer {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  width: auto;
+}
+
+.page-footer img {
+  width: 30px;
+  height: auto;
+}
+
+.page-footer .footer-text {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 6px;
+  font-size: 8px;
+  line-height: 1.1;
+}
+
+/* strong è già bold, ma puoi regolare se vuoi */
+.page-footer .footer-text strong {
+  font-weight: bold;
+}
+
+
+
+    :root {
+      --primary:    #333333;
+      --text:       #333333;
+      --bg:         #FFFFFF;
+      --border:     #E8E8E8;
+      --font:       'Segoe UI', sans-serif;
+    }
+    body {
+      margin:0; padding:20px;
+      background:var(--bg);
+      color:var(--text);
+      font-family:var(--font);
+      font-size:11px; line-height:1.4;
+    }
+    .card { max-width:820px; margin:auto; }
+
+    /* HEADER */
+    .header {
+      display:flex; justify-content:space-between; align-items:flex-end;
+      margin-bottom:20px;
+    }
+    .header .title {
+      font-size:18px; font-weight:bold; text-transform:uppercase;
+    }
+    .header .id-bubble {
+      font-size:32px; font-weight:bold;
+      background:var(--text); color:#fff;
+      padding:4px 14px; border-radius:20px;
+    }
+
+    /* SECTION TITLE */
+.section-title {
+  display: table;             /* diventa block-level ma si riduce al contenuto */
+  margin: 16px auto 8px;      /* auto sui lati orizzontali la centra */
+  
+  /* e per il resto lasci tutto com’era */
+  background: var(--bg);
+  border: 1px solid var(--text);
+  color: var(--text);
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-weight: bold;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+
+
+    /* DETTAGLI: grid 2 colonne */
+    .details-grid {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      column-gap:24px;
+      row-gap:8px;
+      margin-bottom:20px;
+    }
+    .details-grid .item {
+      display:flex; gap:6px;
+    }
+    .details-grid .item .label {
+      font-weight:bold;
+      white-space:nowrap;
+    }
+
+    /* PROGRAMMA LEZIONI */
+table.lessons {
+  width: 100%;
+  border-collapse: collapse;
+  /* prima avevi margin-top:6px; ora usiamo margin per gestire anche il bottom */
+  margin: 6px 0 30px;
+  font-size: 11px;
+}
+
+    table.lessons th, table.lessons td {
+      padding:6px 8px;
+    }
+    table.lessons th {
+      background:var(--bg);
+      border-bottom:2px solid var(--text);
+      text-transform:uppercase;
+      color:var(--text);
+      font-size:11px;
+    }
+    table.lessons tbody tr + tr td {
+      border-top:1px solid var(--border);
+    }
+    table.lessons th, table.lessons td {
+      text-align:center;
+      font-size:11px;
+    }
+
+    /* CHECKBOX */
+    .checkbox {
+      display:inline-block;
+      width:12px; height:12px;
+      border:1px solid var(--text);
+      border-radius:2px;
+    }
+
+   /* VERIFICHE QUALITÀ */
+ /* verifica qualità: layout a 5 colonne */
+table.verify {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  font-size: 11px;
+}
+table.verify th,
+table.verify td {
+  padding: 4px 8px;
+  vertical-align: middle;
+}
+table.verify th {
+  background: var(--bg);
+  border-bottom: 2px solid var(--text);
+  text-transform: uppercase;
+  color: var(--text);
+  font-size: 11px;
+}
+
+/* larghezze colonna-by-colonna */
+table.verify th:nth-child(1),
+table.verify td:nth-child(1) {
+  width: 4%;
+  text-align: center;
+}
+table.verify th:nth-child(2),
+table.verify td:nth-child(2) {
+  width: 50%;
+  text-align: left;
+}
+table.verify th:nth-child(3),
+table.verify td:nth-child(3) {
+  width: 24%;
+  text-align: left;
+}
+table.verify th:nth-child(4),
+table.verify td:nth-child(4) {
+  width: 11%;
+  text-align: center;
+}
+table.verify th:nth-child(5),
+table.verify td:nth-child(5) {
+  width: 11%;
+  text-align: center;
+}
+
+/* checkbox e input-line come prima */
+.verify .checkbox {
+  display: inline-block;
+  width: 12px; height: 12px;
+  border: 1px solid var(--text);
+  border-radius: 2px;
+}
+.input-line {
+  display: inline-block;
+  border-bottom: 1px solid var(--text);
+  width: 90px;
+  vertical-align: text-bottom;
+  margin-left: 6px;
+}
+
+    /* FOOTER NOTE */
+    .footer {
+      margin-top:20px;
+    }
+
+.details-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+  font-size: 11px;
+}
+.details-table th,
+.details-table td {
+  padding: 4px 8px;
+  vertical-align: top;
+}
+.details-table th {
+  width: 20%;
+  text-align: left;
+  font-weight: bold;
+}
+.details-table td {
+  width: 30%;
+  text-align: left;
+}
+
+
+/* --- BRANDING IN FONDO --- */
+.brand-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 24px;
+}
+.brand-footer img {
+  width: 100px;
+  height: 100px;
+}
+.brand-footer span {
+  font-size: 12px;
+  font-weight: bold;
+  color: var(--text);
+}
+
+
+  </style>
+</head>
+<body>
+  <div class="card">
+
+    <!-- HEADER -->
+    <div class="header">
+      <div class="title">Scheda Attività Formativa</div>
+      <div class="id-bubble">{{id}}</div>
+    </div>
+
+     <!-- DETTAGLI -->
+    <div class="section-title">Dettagli</div>
+    <table class="details-table">
+      <tr>
+        <th>Nome Corso:</th>
+        <td>{{corso_titolo}}</td>
+        <th>Corso Finanziato:</th>
+        <td>{{finanziato}}</td>
+      </tr>
+      <tr>
+        <th>N° Partecipanti:</th>
+        <td>{{n_partecipanti}}</td>
+        <th>Fondo:</th>
+        <td>{{fondo}}</td>
+      </tr>
+      <tr>
+        <th>Richiedente:</th>
+        <td>{{richiedente}}</td>
+        <th>Tutor:</th>
+        <td>{{tutor}}</td>
+      </tr>
+      <tr>
+        <th>Azienda:</th>
+        <td>{{azienda}}</td>
+        <th>Modalità:</th>
+        <td>{{modalita}}</td>
+      </tr>
+      <tr>
+        <th>Sede:</th>
+        <td>{{sede}}</td>
+        <th></th>
+        <td></td>
+      </tr>
+    </table>
+
+
+
+    <!-- PROGRAMMA LEZIONI -->
+    {{#if has_lezioni}}
+    <div class="section-title">Programma Lezioni</div>
+    <table class="lessons">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Inizio</th>
+          <th>Fine</th>
+          <th>Docente</th>
+          <th>Firma Discenti</th>
+          <th>Firma Docenti</th>
+          <th>NC</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{lezioni_rows}}
+      </tbody>
+    </table>
+
+    {{/if}}
+
+
+    <!-- VERIFICHE QUALITÀ -->
+    <div class="section-title">Verifiche qualità</div>
+    <table class="verify">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Operazione</th>
+          <th>Dettagli</th>
+          <th>Firme discenti</th>
+          <th>Firme docenti</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="checkbox"></span></td>
+          <td>Registri consegnati al docente</td>
+          <td>Data<span class="input-line"></span></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="checkbox"></span></td>
+          <td>Registri riconsegnati dal docente</td>
+          <td>Data<span class="input-line"></span></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="checkbox"></span></td>
+          <td>Schede Iscrizione rientrate</td>
+          <td>____ / {{n_partecipanti}}</td>
+          <td><span class="checkbox"></span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><span class="checkbox"></span></td>
+          <td>Test rientrati</td>
+          <td>____ / {{n_partecipanti}}</td>
+          <td><span class="checkbox"></span></td>
+          <td><span class="checkbox"></span></td>
+        </tr>
+      </tbody>
+    </table>
+
+
+    <!-- FOOTER NOTE -->
+    <div class="footer">
+      <strong>Note:</strong> {{note}}
+    </div>
+
+  </div>
+
+  <!-- FOOTER SU OGNI PAGINA (centro in basso) -->
+  <div class="page-footer">
+    <img src="{{logo_data}}" alt="Logo Biosound">
+    <div class="footer-text">
+      <strong>Realizzato<br>da Biosound</strong>
+    </div>
+  </div>
+
+
+
+
+
+</body>
+</html>
