@@ -1,131 +1,122 @@
 <?php
 // scarica_registro.php
 // Genera un unico PDF con i registri delle lezioni di un'attività,
-// preservando formattazione con OpenTBS, su Linux e Windows.
+// usando ZipArchive per sostituire i placeholder, poi soffice+gs.
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+ini_set('display_errors',1);
+ini_set('display_startup_errors',1);
 error_reporting(E_ALL);
 
-require_once __DIR__ . '/init.php';            // connessione $pdo
-require_once __DIR__ . '/vendor/autoload.php'; // Composer autoload
-// Carica manuale del plugin per definire OPENTBS_PLUGIN
-require_once __DIR__ . '/vendor/tinybutstrong/opentbs/tbs_plugin_opentbs.php';
+require_once __DIR__ . '/init.php';          // connessione $pdo, sessione, ecc.
 
-use clsTinyButStrong;
-use tbs_plugin_opentbs;
-
-/** Rileva Windows */
-function isWindows(): bool {
-    return strtoupper(substr(PHP_OS,0,3)) === 'WIN';
-}
-/** Escape per CMD Windows */
-function escapeForWindows(string $arg): string {
-    return '"' . str_replace('"','""',$arg) . '"';
-}
-/** Costruisce comando shell con quoting giusto */
-function buildCommand(array $parts): string {
-    $quoted = isWindows()
-        ? array_map('escapeForWindows', $parts)
-        : array_map('escapeshellarg', $parts);
-    return implode(' ', $quoted) . ' 2>&1';
-}
-/** Trova binario in PATH o candidati Windows */
-function findBinary(string $name, array $cands=[]): string {
-    if (isWindows()) {
-        foreach ($cands as $p) if (file_exists($p)) return $p;
-        return $name;
-    }
-    $which = trim(shell_exec("which {$name} 2>/dev/null"));
-    return $which!=='' ? $which : $name;
-}
-
-// 1) ID attività
+// 1) Parametro ID
 $id = $_GET['id'] ?? null;
 if (!$id) {
     http_response_code(400);
     exit('Parametro "id" mancante');
 }
 
-// 2) Carica dati attività + corso
+// 2) Carica attività + corso
 $stmt = $pdo->prepare("
   SELECT a.*, c.titolo AS corso_titolo
     FROM attivita a
-  LEFT JOIN corso c ON c.id=a.corso_id
-   WHERE a.id=?
+    LEFT JOIN corso c ON c.id = a.corso_id
+   WHERE a.id = ?
 ");
 $stmt->execute([$id]);
 $att = $stmt->fetch(PDO::FETCH_ASSOC)
     or exit("Attività con ID {$id} non trovata");
 
-// 3) Discenti (max 35)
+// 3) Preleva discenti (max 35)
 $dipStmt = $pdo->prepare(<<<'SQL'
   SELECT d.nome,d.cognome,d.codice_fiscale AS cf,
          d.datanascita,d.luogonascita,az.ragionesociale AS azienda
     FROM dipendente d
-    JOIN attivita_dipendente ad ON ad.dipendente_id=d.id
-    LEFT JOIN dipendente_sede ds ON ds.dipendente_id=d.id
-    LEFT JOIN sede s ON s.id=ds.sede_id
-    LEFT JOIN azienda az ON az.id=s.azienda_id
-   WHERE ad.attivita_id=?
+    JOIN attivita_dipendente ad ON ad.dipendente_id = d.id
+    LEFT JOIN dipendente_sede ds ON ds.dipendente_id = d.id
+    LEFT JOIN sede s           ON s.id = ds.sede_id
+    LEFT JOIN azienda az       ON az.id = s.azienda_id
+   WHERE ad.attivita_id = ?
    LIMIT 35
 SQL
 );
 $dipStmt->execute([$id]);
 $discenti = $dipStmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 4) Date lezioni
+// 4) Preleva date lezioni
 $dateStmt = $pdo->prepare(<<<'SQL'
   SELECT DISTINCT dl.data
     FROM datalezione dl
-    JOIN incarico i ON i.id=dl.incarico_id
-   WHERE i.attivita_id=?
+    JOIN incarico i ON i.id = dl.incarico_id
+   WHERE i.attivita_id = ?
    ORDER BY dl.data
 SQL
 );
 $dateStmt->execute([$id]);
 $dateList = $dateStmt->fetchAll(PDO::FETCH_COLUMN);
 
-// 5) Cartella temp
+// 5) Prepara cartella temp
 $work = __DIR__ . '/resources/templates/temp';
 if (!is_dir($work) && !mkdir($work,0777,true)) {
-    exit("Impossibile creare cartella: {$work}");
+    exit("Impossibile creare la cartella di lavoro: {$work}");
 }
 
-// 6) Binari
-$soffice = findBinary('soffice', [
+// 6) Rileva binari soffice e gs
+function findBin($name, $cands=[]) {
+    if (stripos(PHP_OS,'WIN')===0) {
+        foreach ($cands as $p) if (file_exists($p)) return $p;
+        return $name;
+    }
+    $w = trim(shell_exec("which {$name} 2>/dev/null"));
+    return $w!==''? $w : $name;
+}
+$soffice = findBin('soffice', [
     'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
     'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe'
 ]);
-$gs      = findBinary('gs', [
+$gs      = findBin('gs', [
     'C:\\Program Files\\gs\\gs\\bin\\gswin64c.exe',
     'C:\\Program Files\\gs\\gs\\bin\\gswin32c.exe'
 ]);
-// Verifica esistenza
-foreach ([$soffice,$gs] as $b) {
-    $chk = isWindows()
-        ? shell_exec("where ".escapeForWindows($b)." 2>NUL")
-        : shell_exec("which ".escapeshellarg($b)." 2>/dev/null");
-    if (trim($chk)==='') exit("Binario non trovato: {$b}");
+
+// Controlla che esistano
+foreach ([$soffice,$gs] as $bin) {
+    $chk = stripos(PHP_OS,'WIN')===0
+        ? shell_exec("where \"{$bin}\" 2>NUL")
+        : shell_exec("which \"{$bin}\" 2>/dev/null");
+    if (trim($chk)==='') exit("Binario non trovato: {$bin}");
 }
 
-// 7) Inizializza OpenTBS
-$TBS = new clsTinyButStrong;
-$TBS->Plugin(TBS_INSTALL, OPENTBS_PLUGIN);
-
-// 8) Loop per ogni data
+// 7) Loop per ogni data: sostituisci placeholder e genera PDF
 $pdfFiles = [];
 $template = __DIR__ . '/resources/templates/registro_template.docx';
 
-foreach ($dateList as $d) {
-    // Carica & merge
-    $TBS->LoadTemplate($template, OPENTBS_ALREADY_UTF8);
-    $TBS->MergeField('IDCorso', $att['id']);
-    $TBS->MergeField('Corso',   $att['corso_titolo']);
-    $TBS->MergeField('Sede',    $att['luogo']);
-    $TBS->MergeField('Data',    date('d/m/Y',strtotime($d)));
+foreach ($dateList as $dataLezione) {
+    // 7.1) Crea una copia del template
+    $docxPath = "{$work}/registro_{$id}_" . uniqid() . ".docx";
+    if (!copy($template, $docxPath)) {
+        exit("Impossibile copiare il template");
+    }
 
-    // Docenti
+    // 7.2) Apri con ZipArchive
+    $zip = new ZipArchive();
+    if ($zip->open($docxPath)!==true) {
+        exit("Errore: non posso aprire $docxPath come ZIP");
+    }
+    $xml = $zip->getFromName('word/document.xml');
+    if ($xml===false) {
+        exit("Errore: word/document.xml non trovato");
+    }
+
+    // 7.3) Prepara mappa sostituzioni
+    $map = [];
+    // fissi
+    $map['${IDCorso}'] = htmlspecialchars($att['id'],    ENT_XML1);
+    $map['${Corso}']   = htmlspecialchars($att['corso_titolo'],ENT_XML1);
+    $map['${Sede}']    = htmlspecialchars($att['luogo'], ENT_XML1);
+    $map['${Data}']    = date('d/m/Y', strtotime($dataLezione));
+
+    // docenti per data
     $docStmt = $pdo->prepare(<<<'SQL'
       SELECT DISTINCT d.nome,d.cognome
         FROM datalezione dl
@@ -135,84 +126,94 @@ foreach ($dateList as $d) {
        WHERE i.attivita_id=? AND dl.data=?
 SQL
     );
-    $docStmt->execute([$id,$d]);
+    $docStmt->execute([$id,$dataLezione]);
     $docs = $docStmt->fetchAll(PDO::FETCH_ASSOC);
-    $names = array_map(fn($r)=>"{$r['cognome']} {$r['nome']}",$docs);
-    $TBS->MergeField('Docente', implode(', ',$names));
+    $names = array_map(fn($r)=>"{$r['cognome']} {$r['nome']}", $docs);
+    $map['${Docente}'] = htmlspecialchars(implode(', ',$names), ENT_XML1);
 
-    // Discenti
+    // discenti
     foreach ($discenti as $i=>$u) {
         $n = $i+1;
-        $TBS->MergeField("Nome{$n}",    $u['nome']);
-        $TBS->MergeField("Cognome{$n}", $u['cognome']);
-        $TBS->MergeField("natoA{$n}",   $u['luogonascita']);
-        $TBS->MergeField("natoIl{$n}",  $u['datanascita']
-                                        ? date('d/m/Y',strtotime($u['datanascita']))
-                                        : '');
-        $TBS->MergeField("CF{$n}",      $u['cf']);
-        $TBS->MergeField("Azienda{$n}", $u['azienda']);
+        $map["\${Nome{$n}}"]    = htmlspecialchars($u['nome'], ENT_XML1);
+        $map["\${Cognome{$n}}"] = htmlspecialchars($u['cognome'], ENT_XML1);
+        $map["\${natoA{$n}}"]   = htmlspecialchars($u['luogonascita'], ENT_XML1);
+        $map["\${natoIl{$n}}"]  = $u['datanascita']
+            ? date('d/m/Y',strtotime($u['datanascita']))
+            : '';
+        $map["\${CF{$n}}"]      = htmlspecialchars($u['cf'], ENT_XML1);
+        $map["\${Azienda{$n}}"] = htmlspecialchars($u['azienda'], ENT_XML1);
     }
+    // svuota i rimanenti fino a 35
     for ($j=count($discenti)+1; $j<=35; $j++) {
-        $TBS->MergeField("Nome{$j}",'');
-        $TBS->MergeField("Cognome{$j}",'');
-        $TBS->MergeField("natoA{$j}",'');
-        $TBS->MergeField("natoIl{$j}",'');
-        $TBS->MergeField("CF{$j}",'');
-        $TBS->MergeField("Azienda{$j}",'');
+        foreach (['Nome','Cognome','natoA','natoIl','CF','Azienda'] as $fld) {
+            $map["\${{$fld}{$j}}"] = '';
+        }
     }
 
-    // Salva docx
-    $docx = "{$work}/registro_{$id}_" . uniqid() . ".docx";
-    $TBS->Show(OPENTBS_FILE, $docx);
+    // 7.4) Applica le sostituzioni
+    $xml = str_replace(
+        array_keys($map),
+        array_values($map),
+        $xml
+    );
+    $zip->addFromString('word/document.xml', $xml);
+    $zip->close();
 
-    // Profile LO
+    // 7.5) Converte in PDF usando LibreOffice headless
     $profile = "{$work}/lo_profile_" . uniqid();
     @mkdir($profile,0777,true);
 
-    // Converti in PDF
-    $cmd = buildCommand([
+    // prepara comando
+    $cmdParts = [
         $soffice,
         '--headless',
         "-env:UserInstallation=file://{$profile}",
         '--convert-to','pdf',
         '--outdir',$work,
-        $docx
-    ]);
-    exec($cmd,$out,$ret);
+        $docxPath
+    ];
+    // escape
+    $cmd = stripos(PHP_OS,'WIN')===0
+         ? '"' . implode('" "', $cmdParts) . '" 2>&1'
+         : implode(' ', array_map('escapeshellarg', $cmdParts)) . ' 2>&1';
 
-    // elimina profilo
-    if (isWindows()) {
-        exec(buildCommand(['rmdir','/S','/Q',$profile]));
+    exec($cmd, $out, $ret);
+    // rimuovi profilo
+    if (stripos(PHP_OS,'WIN')===0) {
+        exec("rmdir /S /Q " . escapeshellarg($profile));
     } else {
-        exec(buildCommand(['rm','-rf',$profile]));
+        exec("rm -rf " . escapeshellarg($profile));
+    }
+    if ($ret!==0) {
+        exit("Errore conversione PDF (LibreOffice):\n" . implode("\n",$out));
     }
 
-    if ($ret!==0) exit("LibreOffice errore:\n".implode("\n",$out));
-
-    // Raccogli PDF e cancella docx
-    $pdf = preg_replace('/\.docx$/i','.pdf',$docx);
+    // raccogli PDF e cancella DOCX
+    $pdf = preg_replace('/\.docx$/i','.pdf',$docxPath);
     if (!file_exists($pdf)) exit("PDF non trovato");
-    $pdfFiles[]=$pdf;
-    @unlink($docx);
+    $pdfFiles[] = $pdf;
+    @unlink($docxPath);
 }
 
-// 9) Fusione PDF
+// 8) Unisci PDF con Ghostscript
 $final = "{$work}/registro_{$id}_" . time() . ".pdf";
 $parts = array_merge(
     [$gs,'-dNOPAUSE','-dBATCH','-q','-sDEVICE=pdfwrite',"-sOutputFile={$final}"],
     $pdfFiles
 );
-exec(buildCommand($parts), $og, $rg);
-if ($rg!==0 || !file_exists($final)) {
-    exit("Ghostscript errore:\n".implode("\n",$og));
+$cmd = stripos(PHP_OS,'WIN')===0
+     ? '"' . implode('" "', $parts) . '" 2>&1'
+     : implode(' ', array_map('escapeshellarg',$parts)) . ' 2>&1';
+exec($cmd, $ogs, $rgs);
+if ($rgs!==0 || !file_exists($final)) {
+    exit("Errore fusione PDF (Ghostscript):\n".implode("\n",$ogs));
 }
-
-// cancella intermedi
+// pulisci intermedi
 foreach ($pdfFiles as $f) @unlink($f);
 
-// 10) Download finale
+// 9) Invia il PDF finale
 header('Content-Type: application/pdf');
-header('Content-Disposition: attachment; filename="registro_'.$id.'.pdf"');
+header('Content-Disposition: attachment; filename="registro_' . $id . '.pdf"');
 readfile($final);
 @unlink($final);
 exit;
