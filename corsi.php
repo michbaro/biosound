@@ -1,5 +1,5 @@
 <?php
-include 'init.php';    // must come before any HTML
+include 'init.php';
 $added = isset($_GET['added']);
 ?>
 <!DOCTYPE html>

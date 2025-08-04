@@ -131,7 +131,19 @@ $sediAll     = $pdo->query("SELECT id, nome, azienda_id FROM sede ORDER BY nome"
 ?>
   <div class="container">
     <h1>Dipendenti</h1>
-
+    <div class="add-container">
+      <?php if ($sede_id): ?>
+        <a href="/biosound/aggiungi_dipendente.php?sede_id=<?= urlencode($sede_id) ?>"
+           class="add-btn"><i class="bi bi-plus-lg"></i> Aggiungi Dipendente</a>
+      <?php elseif ($azienda_id): ?>
+        <a href="/biosound/aggiungi_dipendente.php?azienda_id=<?= urlencode($azienda_id) ?>"
+           class="add-btn"><i class="bi bi-plus-lg"></i> Aggiungi Dipendente</a>
+      <?php else: ?>
+        <a href="/biosound/aggiungi_dipendente.php" class="add-btn">
+          <i class="bi bi-plus-lg"></i> Aggiungi Dipendente
+        </a>
+      <?php endif; ?>
+    </div>
     <?php if (count($dipendenti) > 0): ?>
       <div class="context-title"><?= htmlspecialchars($contextName) ?></div>
     <?php endif; ?>
@@ -155,19 +167,7 @@ $sediAll     = $pdo->query("SELECT id, nome, azienda_id FROM sede ORDER BY nome"
       </div>
     </div>
 
-    <div class="add-container">
-      <?php if ($sede_id): ?>
-        <a href="/biosound/aggiungi_dipendente.php?sede_id=<?= urlencode($sede_id) ?>"
-           class="add-btn"><i class="bi bi-plus-lg"></i> Aggiungi Dipendente</a>
-      <?php elseif ($azienda_id): ?>
-        <a href="/biosound/aggiungi_dipendente.php?azienda_id=<?= urlencode($azienda_id) ?>"
-           class="add-btn"><i class="bi bi-plus-lg"></i> Aggiungi Dipendente</a>
-      <?php else: ?>
-        <a href="/biosound/aggiungi_dipendente.php" class="add-btn">
-          <i class="bi bi-plus-lg"></i> Aggiungi Dipendente
-        </a>
-      <?php endif; ?>
-    </div>
+
 
     <?php if (empty($dipendenti)): ?>
       <p style="text-align:center;color:#666;">Nessun dipendente registrato.</p>

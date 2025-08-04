@@ -42,7 +42,7 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
   --shadow:rgba(0,0,0,0.08);
   --font:'Segoe UI',sans-serif;
   --pri:#66bb6a;
-  --err:#d9534f;    /* ← questo mancava */
+  --err:#d9534f;
 }
 
     *{box-sizing:border-box;margin:0;padding:0;}
@@ -239,8 +239,7 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
         class="icon-btn"
         title="Genera Registro"
         target="_blank">
-        <i class="bi bi-file-earmark-text"></i>
-</a>
+<i class="bi bi-filetype-pdf"></i></a>
         <!-- Genera PDF in nuova scheda -->
 <a href="/biosound/scheda_corso.php?id=<?=urlencode($a['id'])?>"
    class="icon-btn"
