@@ -155,13 +155,14 @@ SQL
     // 9.7) Converte in PDF con profilo dedicato
     $profile = "{$work}/lo_profile_" . uniqid();
     @mkdir($profile,0777,true);
-    $parts = [
-        $soffice, '--headless',
-        "-env:UserInstallation=file://{$profile}",
-        '--convert-to','pdf',
-        '--outdir',$work,
-        $docx
-    ];
+// dopo: forziamo il filtro writer_pdf_Export
+$parts = [
+    $soffice, '--headless',
+    "-env:UserInstallation=file://{$profile}",
+    '--convert-to', 'pdf:writer_pdf_Export',
+    '--outdir', $work,
+    $docx
+];
     $cmd = isWindows()
          ? '"'.implode('" "',$parts).'" 2>&1'
          : implode(' ', array_map('escapeshellarg',$parts)).' 2>&1';
