@@ -1,9 +1,9 @@
 <?php
 // scarica_registro.php
 // Genera un unico PDF con i registri delle lezioni di un'attività,
-// funzionante sia su Linux che Windows, salvando tutto in resources/templates/temp
+// funzionante sia su Linux che su Windows, salvando tutto in resources/templates/temp
 
-// Debug degli errori PHP
+// 0) Debug PHP
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
@@ -14,68 +14,60 @@ require_once __DIR__ . '/vendor/autoload.php';
 use PhpOffice\PhpWord\TemplateProcessor;
 
 /**
- * Rileva se il sistema operativo è Windows.
+ * Determina se siamo su Windows.
  */
 function isWindows(): bool {
     return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
 }
 
 /**
- * Escape per argomenti CMD Windows.
+ * Escape di un argomento per CMD Windows.
  */
 function escapeForWindows(string $arg): string {
     return '"' . str_replace('"', '""', $arg) . '"';
 }
 
 /**
- * Costruisce il comando shell corretto a seconda del SO.
+ * Costruisce la stringa di comando da parti, con quoting corretto su Windows o POSIX.
  */
 function buildCommand(array $parts): string {
-    if (isWindows()) {
-        $quoted = array_map('escapeForWindows', $parts);
-    } else {
-        $quoted = array_map('escapeshellarg', $parts);
-    }
+    $quoted = isWindows()
+        ? array_map('escapeForWindows', $parts)
+        : array_map('escapeshellarg', $parts);
     return implode(' ', $quoted) . ' 2>&1';
 }
 
 /**
- * Trova il binario di LibreOffice.
+ * Trova il binario di LibreOffice (soffice).
  */
 function findSoffice(): string {
     if (isWindows()) {
-        $candidates = [
+        $cands = [
             'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
             'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe'
         ];
-        foreach ($candidates as $p) {
-            if (file_exists($p)) {
-                return $p;
-            }
+        foreach ($cands as $p) {
+            if (file_exists($p)) return $p;
         }
         return 'soffice';
     } else {
-        $which = trim(shell_exec('which soffice 2>/dev/null'));
-        return $which !== '' ? $which : 'soffice';
+        $w = trim(shell_exec('which soffice 2>/dev/null'));
+        return $w !== '' ? $w : 'soffice';
     }
 }
 
 /**
- * Trova il binario di Ghostscript.
+ * Trova il binario di Ghostscript (gs).
  */
 function findGs(): string {
     if (isWindows()) {
         $base = 'C:\\Program Files\\gs\\';
-        foreach (glob($base . '*\\bin\\gswin64c.exe') as $p) {
-            return $p;
-        }
-        foreach (glob($base . '*\\bin\\gswin32c.exe') as $p) {
-            return $p;
-        }
+        foreach (glob($base . '*\\bin\\gswin64c.exe') as $p) return $p;
+        foreach (glob($base . '*\\bin\\gswin32c.exe') as $p) return $p;
         return 'gswin64c.exe';
     } else {
-        $which = trim(shell_exec('which gs 2>/dev/null'));
-        return $which !== '' ? $which : 'gs';
+        $w = trim(shell_exec('which gs 2>/dev/null'));
+        return $w !== '' ? $w : 'gs';
     }
 }
 
@@ -108,8 +100,8 @@ if (!$attivita) {
 // 3) Carica fino a 35 discenti
 // --------------------------------------------------
 $dipStmt = $pdo->prepare(<<<'SQL'
-  SELECT d.nome, d.cognome, d.codice_fiscale AS cf,
-         d.datanascita, d.luogonascita, az.ragionesociale AS azienda
+  SELECT d.nome,d.cognome,d.codice_fiscale AS cf,
+         d.datanascita,d.luogonascita,az.ragionesociale AS azienda
     FROM dipendente d
     JOIN attivita_dipendente ad ON ad.dipendente_id = d.id
     LEFT JOIN dipendente_sede ds ON ds.dipendente_id = d.id
@@ -149,19 +141,16 @@ if (!is_dir($workingDir) && !mkdir($workingDir, 0777, true)) {
 // --------------------------------------------------
 $soffice = findSoffice();
 $gs      = findGs();
-
-// Verifica presenza nel PATH
+// Verifica che siano trovati
 foreach ([$soffice, $gs] as $bin) {
     $check = isWindows()
         ? shell_exec("where " . escapeshellarg($bin) . " 2>NUL")
         : shell_exec("which " . escapeshellarg($bin) . " 2>/dev/null");
-    if (trim($check) === '') {
-        exit("Errore: binario non trovato: {$bin}");
-    }
+    if (trim($check) === '') exit("Errore: binario non trovato: {$bin}");
 }
 
 // --------------------------------------------------
-// 7) Generazione DOCX → PDF per ogni data
+// 7) Genera DOCX → PDF per ogni data
 // --------------------------------------------------
 $pdfFiles = [];
 $template = __DIR__ . '/resources/templates/registro_template.docx';
@@ -174,15 +163,15 @@ foreach ($dateList as $dataLezione) {
     $tpl->setValue('Sede',    $attivita['luogo']);
     $tpl->setValue('Data',    date('d/m/Y', strtotime($dataLezione)));
 
-    // 7.1.a) Docenti per data
+    // Docenti per questa data
     $docStmt = $pdo->prepare(<<<'SQL'
-      SELECT DISTINCT d.nome, d.cognome
+      SELECT DISTINCT d.nome,d.cognome
         FROM datalezione dl
         JOIN incarico i ON i.id = dl.incarico_id
         JOIN docenteincarico di ON di.incarico_id = i.id
         JOIN docente d ON d.id = di.docente_id
        WHERE i.attivita_id = ? AND dl.data = ?
-       ORDER BY d.cognome, d.nome
+       ORDER BY d.cognome,d.nome
 SQL
     );
     $docStmt->execute([$id, $dataLezione]);
@@ -190,7 +179,7 @@ SQL
     $nomiDoc  = array_map(fn($d) => "{$d['cognome']} {$d['nome']}", $listaDoc);
     $tpl->setValue('Docente', implode(', ', $nomiDoc));
 
-    // 7.1.b) Partecipanti (Nome1…Azienda35)
+    // Partecipa­ti: Nome1…Azienda35
     foreach ($discenti as $i => $u) {
         $n = $i + 1;
         $tpl->setValue("Nome$n",    $u['nome']);
@@ -209,11 +198,11 @@ SQL
         $tpl->setValue("Azienda$j", '');
     }
 
-    // 7.2) Salva DOCX temporaneo
+    // 7.2) Salva DOCX
     $docxPath = "{$workingDir}/registro_{$id}_" . uniqid() . ".docx";
     $tpl->saveAs($docxPath);
 
-    // 7.3) Prepara profilo LIS
+    // 7.3) Prepara profilo user per LibreOffice
     $profileDir = "{$workingDir}/lo_profile_" . uniqid();
     @mkdir($profileDir, 0777, true);
 
@@ -221,29 +210,29 @@ SQL
     $cmd = buildCommand([
         $soffice,
         '--headless',
-        "--env:UserInstallation=file://{$profileDir}",
+        "-env:UserInstallation=file://{$profileDir}",
         '--convert-to', 'pdf',
         '--outdir', $workingDir,
         $docxPath
     ]);
     exec($cmd, $out, $ret);
-    // pulizia profilo
-    exec(isWindows()
-        ? buildCommand(['rmdir','/S','/Q', $profileDir])
-        : buildCommand(['rm','-rf', $profileDir])
-    );
+
+    // eliminate il profilo
+    $cleanup = isWindows()
+        ? buildCommand(['rmdir','/S','/Q',$profileDir])
+        : buildCommand(['rm','-rf',$profileDir]);
+    exec($cleanup);
+
     if ($ret !== 0) {
         exit("Errore conversione PDF (LibreOffice):\n" . implode("\n", $out));
     }
 
-    // 7.5) Raccogli PDF
+    // 7.5) Raccogli PDF e rimuovi DOCX
     $pdfPath = preg_replace('/\.docx$/i', '.pdf', $docxPath);
     if (!file_exists($pdfPath)) {
         exit("PDF non trovato dopo conversione");
     }
     $pdfFiles[] = $pdfPath;
-
-    // 7.6) Rimuovi DOCX temporaneo
     @unlink($docxPath);
 }
 
@@ -251,7 +240,7 @@ SQL
 // 8) Unisci tutti i PDF in uno solo
 // --------------------------------------------------
 $finalPdf = "{$workingDir}/registro_{$id}_" . time() . ".pdf";
-$parts = array_merge(
+$parts    = array_merge(
     [$gs, '-dNOPAUSE', '-dBATCH', '-q', '-sDEVICE=pdfwrite', "-sOutputFile={$finalPdf}"],
     $pdfFiles
 );
@@ -273,6 +262,6 @@ header('Content-Type: application/pdf');
 header('Content-Disposition: attachment; filename="registro_' . $id . '.pdf"');
 readfile($finalPdf);
 
-// 11) Rimuovi PDF finale
+// 11) Rimuovi finale
 @unlink($finalPdf);
 exit;
