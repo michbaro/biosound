@@ -1,7 +1,12 @@
 <?php
 // scarica_registro.php
 // Genera un unico PDF con i registri delle lezioni di un'attività,
-// funzionante sia su Linux che Windows, usando resources/templates/temp
+// funzionante sia su Linux che Windows, salvando tutto in resources/templates/temp
+
+// Debug degli errori PHP
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
 
 require_once __DIR__ . '/init.php';
 require_once __DIR__ . '/vendor/autoload.php';
@@ -9,23 +14,21 @@ require_once __DIR__ . '/vendor/autoload.php';
 use PhpOffice\PhpWord\TemplateProcessor;
 
 /**
- * Ritorna true se il sistema operativo è Windows.
+ * Rileva se il sistema operativo è Windows.
  */
 function isWindows(): bool {
     return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
 }
 
 /**
- * Quote di un singolo argomento per CMD Windows.
+ * Escape per argomenti CMD Windows.
  */
 function escapeForWindows(string $arg): string {
-    // duplica le doppie virgolette, poi wrap
     return '"' . str_replace('"', '""', $arg) . '"';
 }
 
 /**
- * Costruisce la stringa di comando da un array di parti,
- * applicando quoting corretto per Windows o POSIX.
+ * Costruisce il comando shell corretto a seconda del SO.
  */
 function buildCommand(array $parts): string {
     if (isWindows()) {
@@ -33,13 +36,11 @@ function buildCommand(array $parts): string {
     } else {
         $quoted = array_map('escapeshellarg', $parts);
     }
-    // redirige stderr in stdout per debug
     return implode(' ', $quoted) . ' 2>&1';
 }
 
 /**
- * Trova il binario di LibreOffice (soffice).
- * Su Windows cerca nei percorsi standard, altrimenti usa 'soffice'.
+ * Trova il binario di LibreOffice.
  */
 function findSoffice(): string {
     if (isWindows()) {
@@ -52,10 +53,8 @@ function findSoffice(): string {
                 return $p;
             }
         }
-        // fallback: proviamo a vedere se è nel PATH
         return 'soffice';
     } else {
-        // Linux/Mac: cerchiamo con which
         $which = trim(shell_exec('which soffice 2>/dev/null'));
         return $which !== '' ? $which : 'soffice';
     }
@@ -63,8 +62,6 @@ function findSoffice(): string {
 
 /**
  * Trova il binario di Ghostscript.
- * Su Windows cerca gswin64c.exe o gswin32c.exe in C:\Program Files\gs\*\bin
- * altrimenti usa 'gs'.
  */
 function findGs(): string {
     if (isWindows()) {
@@ -92,7 +89,7 @@ if (!$id) {
 }
 
 // --------------------------------------------------
-// 2) Carica dati attività e corso
+// 2) Carica dati attività + corso
 // --------------------------------------------------
 $stmt = $pdo->prepare("
     SELECT a.*, c.titolo AS corso_titolo
@@ -108,7 +105,7 @@ if (!$attivita) {
 }
 
 // --------------------------------------------------
-// 3) Carica fino a 35 discenti associati
+// 3) Carica fino a 35 discenti
 // --------------------------------------------------
 $dipStmt = $pdo->prepare(<<<'SQL'
   SELECT d.nome, d.cognome, d.codice_fiscale AS cf,
@@ -143,7 +140,7 @@ $dateList = $dateStmt->fetchAll(PDO::FETCH_COLUMN);
 // 5) Prepara cartella di lavoro interna
 // --------------------------------------------------
 $workingDir = __DIR__ . '/resources/templates/temp';
-if (!is_dir($workingDir) && false === mkdir($workingDir, 0777, true)) {
+if (!is_dir($workingDir) && !mkdir($workingDir, 0777, true)) {
     exit("Impossibile creare la cartella di lavoro: {$workingDir}");
 }
 
@@ -153,11 +150,21 @@ if (!is_dir($workingDir) && false === mkdir($workingDir, 0777, true)) {
 $soffice = findSoffice();
 $gs      = findGs();
 
+// Verifica presenza nel PATH
+foreach ([$soffice, $gs] as $bin) {
+    $check = isWindows()
+        ? shell_exec("where " . escapeshellarg($bin) . " 2>NUL")
+        : shell_exec("which " . escapeshellarg($bin) . " 2>/dev/null");
+    if (trim($check) === '') {
+        exit("Errore: binario non trovato: {$bin}");
+    }
+}
+
 // --------------------------------------------------
 // 7) Generazione DOCX → PDF per ogni data
 // --------------------------------------------------
-$pdfFiles   = [];
-$template   = __DIR__ . '/resources/templates/registro_template.docx';
+$pdfFiles = [];
+$template = __DIR__ . '/resources/templates/registro_template.docx';
 
 foreach ($dateList as $dataLezione) {
     // 7.1) Compila il template
@@ -176,7 +183,7 @@ foreach ($dateList as $dataLezione) {
         JOIN docente d ON d.id = di.docente_id
        WHERE i.attivita_id = ? AND dl.data = ?
        ORDER BY d.cognome, d.nome
-    SQL
+SQL
     );
     $docStmt->execute([$id, $dataLezione]);
     $listaDoc = $docStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -193,7 +200,6 @@ foreach ($dateList as $dataLezione) {
         $tpl->setValue("CF$n",      $u['cf']);
         $tpl->setValue("Azienda$n", $u['azienda']);
     }
-    // pulisci placeholder non usati
     for ($j = count($discenti) + 1; $j <= 35; $j++) {
         $tpl->setValue("Nome$j",    '');
         $tpl->setValue("Cognome$j", '');
@@ -204,45 +210,52 @@ foreach ($dateList as $dataLezione) {
     }
 
     // 7.2) Salva DOCX temporaneo
-    $docxPath = "$workingDir/registro_{$id}_" . uniqid() . ".docx";
+    $docxPath = "{$workingDir}/registro_{$id}_" . uniqid() . ".docx";
     $tpl->saveAs($docxPath);
 
-    // 7.3) Converte in PDF
+    // 7.3) Prepara profilo LIS
+    $profileDir = "{$workingDir}/lo_profile_" . uniqid();
+    @mkdir($profileDir, 0777, true);
+
+    // 7.4) Converte in PDF con profilo dedicato
     $cmd = buildCommand([
         $soffice,
         '--headless',
+        "--env:UserInstallation=file://{$profileDir}",
         '--convert-to', 'pdf',
         '--outdir', $workingDir,
         $docxPath
     ]);
     exec($cmd, $out, $ret);
+    // pulizia profilo
+    exec(isWindows()
+        ? buildCommand(['rmdir','/S','/Q', $profileDir])
+        : buildCommand(['rm','-rf', $profileDir])
+    );
     if ($ret !== 0) {
         exit("Errore conversione PDF (LibreOffice):\n" . implode("\n", $out));
     }
 
-    // 7.4) Raccogli PDF
+    // 7.5) Raccogli PDF
     $pdfPath = preg_replace('/\.docx$/i', '.pdf', $docxPath);
     if (!file_exists($pdfPath)) {
         exit("PDF non trovato dopo conversione");
     }
     $pdfFiles[] = $pdfPath;
 
-    // 7.5) Rimuovi DOCX
+    // 7.6) Rimuovi DOCX temporaneo
     @unlink($docxPath);
 }
 
 // --------------------------------------------------
 // 8) Unisci tutti i PDF in uno solo
 // --------------------------------------------------
-$finalPdf = "$workingDir/registro_{$id}_" . time() . ".pdf";
-$parts    = array_merge(
-    [$gs, '-dNOPAUSE', '-dBATCH', '-q', '-sDEVICE=pdfwrite', "-sOutputFile=$finalPdf"],
+$finalPdf = "{$workingDir}/registro_{$id}_" . time() . ".pdf";
+$parts = array_merge(
+    [$gs, '-dNOPAUSE', '-dBATCH', '-q', '-sDEVICE=pdfwrite', "-sOutputFile={$finalPdf}"],
     $pdfFiles
 );
-$cmd = isWindows()
-    ? buildCommand($parts)
-    : buildCommand(array_merge([$gs, '-dNOPAUSE', '-dBATCH', '-q', '-sDEVICE=pdfwrite', "-sOutputFile=$finalPdf"], $pdfFiles));
-
+$cmd = buildCommand($parts);
 exec($cmd, $outGs, $retGs);
 if ($retGs !== 0 || !file_exists($finalPdf)) {
     exit("Errore fusione PDF (Ghostscript):\n" . implode("\n", $outGs));
@@ -260,6 +273,6 @@ header('Content-Type: application/pdf');
 header('Content-Disposition: attachment; filename="registro_' . $id . '.pdf"');
 readfile($finalPdf);
 
-// 11) Pulisci PDF finale
+// 11) Rimuovi PDF finale
 @unlink($finalPdf);
 exit;
