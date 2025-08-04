@@ -237,7 +237,8 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
         <a href="scarica_registro.php?id=<?=urlencode($a['id'])?>" 
         class="icon-btn"
-        title="Genera Registro">
+        title="Genera Registro"
+        target="_blank">
         <i class="bi bi-file-earmark-text"></i>
 </a>
         <!-- Genera PDF in nuova scheda -->
