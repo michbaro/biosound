@@ -201,7 +201,8 @@ foreach ($pdfFiles as $f) @unlink($f);
 
 // 11) Invia il PDF finale
 header('Content-Type: application/pdf');
-header('Content-Disposition: attachment; filename="registro_'.$id.'.pdf"');
+// modifica – mostra inline nel browser
+header('Content-Disposition: inline; filename="registro_' . $id . '.pdf"');
 readfile($final);
 @unlink($final);
 exit;

@@ -2,12 +2,6 @@
 // attivita.php — form per modificare singola attività con selezione partecipanti e aziende PiP
 require_once __DIR__ . '/init.php';
 
-// 1) Solo admin e dev
-if (($_SESSION['role'] ?? 'utente') === 'utente') {
-    header('Location: /biosound/index.php?unauthorized=1');
-    exit;
-}
-
 // 2) ID attività da modificare
 $id = $_GET['id'] ?? null;
 if (!$id) {

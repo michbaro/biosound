@@ -6,13 +6,6 @@ require_once __DIR__ . '/init.php';
 $errorMaxParticipants = false;
 $maxAllowed           = 0;
 
-
-// 1) Solo admin e dev
-if (($_SESSION['role'] ?? 'utente') === 'utente') {
-    header('Location: /biosound/index.php?unauthorized=1');
-    exit;
-}
-
 // 2) Mappa corsi → categoria & permessi
 $corsiRaw = $pdo
   ->query('SELECT id, titolo, categoria, modalita, maxpartecipanti FROM corso ORDER BY titolo')
@@ -547,8 +540,8 @@ SQL
         <ul id="modal-company-list"></ul>
       </div>
       <div class="modal-actions">
-        <button id="save-companies"   class="btn btn-primary">Salva e chiudi</button>
-        <button id="cancel-companies" class="btn btn-secondary">Annulla</button>
+        <button id="save-companies"   class="btn btn-primary">Aggiungi</button>
+        <button id="cancel-companies" class="btn btn-secondary">Chiudi</button>
       </div>
     </div>
   </div>
