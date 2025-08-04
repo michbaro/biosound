@@ -220,4 +220,4 @@ header('Content-Type: application/pdf');
 header('Content-Disposition: attachment; filename="registro_'.$id.'.pdf"');
 readfile($final);
 @unlink($final);
-exit;
+exit; //
