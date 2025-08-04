@@ -234,6 +234,12 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
         </div>
 
         <div class="actions">
+
+        <a href="scarica_registro.php?id=<?=urlencode($a['id'])?>" 
+        class="icon-btn"
+        title="Genera Registro">
+        <i class="bi bi-file-earmark-text"></i>
+</a>
         <!-- Genera PDF in nuova scheda -->
 <a href="/biosound/scheda_corso.php?id=<?=urlencode($a['id'])?>"
    class="icon-btn"

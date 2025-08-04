@@ -547,10 +547,7 @@ $u->execute([
       </div>
     </form>
   </div>
-  <!-- <a href="/biosound/scarica_registro.php?id=<?=urlencode($id)?>" class="btn btn-secondary">
-  <i class="bi bi-download"></i> Scarica Registro (.docx)
-</a> -->
-  <!-- Modal selezione partecipanti -->
+
   <div id="participant-modal" class="modal-overlay">
     <div class="modal">
       <h2>Seleziona Partecipanti</h2>
