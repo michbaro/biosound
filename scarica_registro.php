@@ -1,26 +1,24 @@
 <?php
 // scarica_registro.php
 // Genera un unico PDF con i registri delle lezioni di un'attività,
-// preservando la formattazione del template .docx usando ZipArchive,
+// sostituendo manualmente i placeholder nel document.xml
 // e unendo i PDF via Ghostscript.
-// Funziona sia su Linux che Windows, tutto in resources/templates/temp
+// Funziona su Linux e Windows, mette tutto in resources/templates/temp
 
-// 0) Debug PHP
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
+ini_set('display_errors',1);
+ini_set('display_startup_errors',1);
 error_reporting(E_ALL);
 
-// 1) Includi init e autoload (assume $pdo da init.php)
-require_once __DIR__ . '/init.php';
+require_once __DIR__ . '/init.php'; // fornisce $pdo, sessione, ecc.
 
-// 2) Parametro ID attività
+// 1) ID attività
 $id = $_GET['id'] ?? null;
 if (!$id) {
     http_response_code(400);
     exit('Parametro "id" mancante');
 }
 
-// 3) Carica dati attività + titolo corso
+// 2) Dati attività + corso
 $stmt = $pdo->prepare("
     SELECT a.*, c.titolo AS corso_titolo
       FROM attivita a
@@ -28,26 +26,26 @@ $stmt = $pdo->prepare("
      WHERE a.id = ?
 ");
 $stmt->execute([$id]);
-$attivita = $stmt->fetch(PDO::FETCH_ASSOC)
+$att = $stmt->fetch(PDO::FETCH_ASSOC)
     or exit("Attività con ID {$id} non trovata");
 
-// 4) Carica fino a 35 discenti
+// 3) Discenti (max 35)
 $dipStmt = $pdo->prepare(<<<'SQL'
-  SELECT d.nome, d.cognome, d.codice_fiscale AS cf,
-         d.datanascita, d.luogonascita, az.ragionesociale AS azienda
+  SELECT d.nome,d.cognome,d.codice_fiscale AS cf,
+         d.datanascita,d.luogonascita,az.ragionesociale AS azienda
     FROM dipendente d
-    JOIN attivita_dipendente ad ON ad.dipendente_id = d.id
-    LEFT JOIN dipendente_sede ds ON ds.dipendente_id = d.id
-    LEFT JOIN sede s           ON s.id = ds.sede_id
-    LEFT JOIN azienda az       ON az.id = s.azienda_id
-   WHERE ad.attivita_id = ?
+    JOIN attivita_dipendente ad ON ad.dipendente_id=d.id
+    LEFT JOIN dipendente_sede ds ON ds.dipendente_id=d.id
+    LEFT JOIN sede s ON s.id=ds.sede_id
+    LEFT JOIN azienda az ON az.id=s.azienda_id
+   WHERE ad.attivita_id=?
    LIMIT 35
 SQL
 );
 $dipStmt->execute([$id]);
 $discenti = $dipStmt->fetchAll(PDO::FETCH_ASSOC);
 
-// 5) Carica date distinte delle lezioni
+// 4) Date lezioni
 $dateStmt = $pdo->prepare(<<<'SQL'
   SELECT DISTINCT dl.data
     FROM datalezione dl
@@ -59,28 +57,23 @@ SQL
 $dateStmt->execute([$id]);
 $dateList = $dateStmt->fetchAll(PDO::FETCH_COLUMN);
 
-// 6) Prepara cartella di lavoro
+// 5) Cartella temp
 $work = __DIR__ . '/resources/templates/temp';
-if (!is_dir($work) && !mkdir($work, 0777, true)) {
-    exit("Impossibile creare la cartella di lavoro: {$work}");
+if (!is_dir($work) && !mkdir($work,0777,true)) {
+    exit("Impossibile creare cartella di lavoro: {$work}");
 }
 
-// 7) Helper per trovare i binari
+// 6) Funzioni helper
 function isWindows(): bool {
-    return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+    return strtoupper(substr(PHP_OS,0,3))==='WIN';
 }
-function findBinary(string $name, array $cands = []): string {
+function findBinary(string $name, array $cands=[]): string {
     if (isWindows()) {
-        foreach ($cands as $p) {
-            if (file_exists($p)) {
-                return $p;
-            }
-        }
+        foreach($cands as $p) if(file_exists($p)) return $p;
         return $name;
-    } else {
-        $which = trim(shell_exec("which {$name} 2>/dev/null"));
-        return $which !== '' ? $which : $name;
     }
+    $which = trim(shell_exec("which {$name} 2>/dev/null"));
+    return $which!==''? $which:$name;
 }
 $soffice = findBinary('soffice', [
     'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
@@ -90,155 +83,141 @@ $gs = findBinary('gs', [
     'C:\\Program Files\\gs\\gs\\bin\\gswin64c.exe',
     'C:\\Program Files\\gs\\gs\\bin\\gswin32c.exe',
 ]);
-
-// 8) Verifica che i binari esistano
-foreach ([$soffice, $gs] as $bin) {
-    $check = isWindows()
-        ? shell_exec("where " . escapeshellarg($bin) . " 2>NUL")
-        : shell_exec("which " . escapeshellarg($bin) . " 2>/dev/null");
-    if (trim($check) === '') {
-        exit("Errore: binario non trovato: {$bin}");
-    }
+// verifica
+foreach([$soffice,$gs] as $bin) {
+    $chk = isWindows()
+        ? shell_exec("where " . escapeshellarg($bin) ." 2>NUL")
+        : shell_exec("which " . escapeshellarg($bin) ." 2>/dev/null");
+    if(trim($chk)==='') exit("Binario non trovato: {$bin}");
 }
 
-// 9) Inizia il ciclo per ogni data
+// 7) Loop sulle date -> genera DOCX, converte in PDF
 $pdfFiles = [];
 $template = __DIR__ . '/resources/templates/registro_template.docx';
 
-foreach ($dateList as $dataLezione) {
-    // 9.1) Copia il template
-    $docxPath = "{$work}/registro_{$id}_" . uniqid() . ".docx";
-    if (!copy($template, $docxPath)) {
-        exit("Impossibile copiare il template");
+foreach($dateList as $dataLezione) {
+    // 7.1) copia template
+    $docxPath = "$work/registro_{$id}_" . uniqid() . ".docx";
+    if(!copy($template,$docxPath)) {
+        exit("Impossibile copiare template");
     }
 
-    // 9.2) Apri con ZipArchive
+    // 7.2) apri ZIP e leggi document.xml
     $zip = new ZipArchive();
-    if ($zip->open($docxPath) !== true) {
-        exit("Errore: non posso aprire $docxPath come ZIP");
+    if($zip->open($docxPath)!==true) {
+        exit("Errore ZIP su $docxPath");
     }
     $xml = $zip->getFromName('word/document.xml');
-    if ($xml === false) {
-        exit("Errore: word/document.xml non trovato");
+    if($xml===false) {
+        exit("document.xml non trovato");
     }
 
-    // 9.3) Costruisci mappa di sostituzione
+    // 7.3) mappa sostituzioni
     $map = [];
-    // segnaposti fissi
-    $map['${IDCorso}'] = htmlspecialchars($attivita['id'],    ENT_XML1);
-    $map['${Corso}']   = htmlspecialchars($attivita['corso_titolo'], ENT_XML1);
-    $map['${Sede}']    = htmlspecialchars($attivita['luogo'], ENT_XML1);
-    $map['${Data}']    = date('d/m/Y', strtotime($dataLezione));
-
-    // segnaposto Docente
+    // fissi
+    $map['${IDCorso}'] = $att['id'];
+    $map['${Corso}']   = $att['corso_titolo'];
+    $map['${Sede}']    = $att['luogo'];
+    $map['${Data}']    = date('d/m/Y',strtotime($dataLezione));
+    // Docenti
     $docStmt = $pdo->prepare(<<<'SQL'
-      SELECT DISTINCT d.nome, d.cognome
+      SELECT DISTINCT d.nome,d.cognome
         FROM datalezione dl
-        JOIN incarico i ON i.id = dl.incarico_id
-        JOIN docenteincarico di ON di.incarico_id = i.id
-        JOIN docente d ON d.id = di.docente_id
-       WHERE i.attivita_id = ? AND dl.data = ?
+        JOIN incarico i ON i.id=dl.incarico_id
+        JOIN docenteincarico di ON di.incarico_id=i.id
+        JOIN docente d ON d.id=di.docente_id
+       WHERE i.attivita_id=? AND dl.data=?
 SQL
     );
-    $docStmt->execute([$id, $dataLezione]);
+    $docStmt->execute([$id,$dataLezione]);
     $docs = $docStmt->fetchAll(PDO::FETCH_ASSOC);
-    $names = array_map(fn($r) => "{$r['cognome']} {$r['nome']}", $docs);
-    $map['${Docente}'] = htmlspecialchars(implode(', ', $names), ENT_XML1);
-
-    // segnaposti discenti reali
-    foreach ($discenti as $i => $u) {
-        $n = $i + 1;
-        $map["\${Nome{$n}}"]    = htmlspecialchars($u['nome'], ENT_XML1);
-        $map["\${Cognome{$n}}"] = htmlspecialchars($u['cognome'], ENT_XML1);
-        $map["\${natoA{$n}}"]   = htmlspecialchars($u['luogonascita'], ENT_XML1);
+    $names = array_map(fn($r)=>"{$r['cognome']} {$r['nome']}",$docs);
+    $map['${Docente}'] = implode(', ',$names);
+    // discenti reali
+    foreach($discenti as $i=>$u) {
+        $n = $i+1;
+        $map["\${Nome{$n}}"]    = $u['nome'];
+        $map["\${Cognome{$n}}"] = $u['cognome'];
+        $map["\${natoA{$n}}"]   = $u['luogonascita'];
         $map["\${natoIl{$n}}"]  = $u['datanascita']
-            ? date('d/m/Y', strtotime($u['datanascita']))
+            ? date('d/m/Y',strtotime($u['datanascita']))
             : '';
-        $map["\${CF{$n}}"]      = htmlspecialchars($u['cf'], ENT_XML1);
-        $map["\${Azienda{$n}}"] = htmlspecialchars($u['azienda'], ENT_XML1);
+        $map["\${CF{$n}}"]      = $u['cf'];
+        $map["\${Azienda{$n}}"] = $u['azienda'];
     }
-
-    // 9.4) Svuota i segnaposti residui da (n+1) a 35
+    // pulisci i restanti
     $count = count($discenti);
-    for ($i = $count + 1; $i <= 35; $i++) {
-        foreach (['Nome','Cognome','natoA','natoIl','CF','Azienda'] as $fld) {
-            $map["\${{$fld}{$i}}"] = '';
+    for($i=$count+1;$i<=35;$i++){
+        foreach(['Nome','Cognome','natoA','natoIl','CF','Azienda'] as $fld){
+            $map['${'.$fld.$i.'}'] = '';
         }
     }
 
-    // 9.5) Applica le sostituzioni
+    // 7.4) sostituisci nel XML
     $newXml = str_replace(
         array_keys($map),
         array_values($map),
         $xml
     );
-    $zip->addFromString('word/document.xml', $newXml);
+    $zip->addFromString('word/document.xml',$newXml);
     $zip->close();
 
-    // 9.6) Converte in PDF con LibreOffice headless e profilo temp
-    $profile = "{$work}/lo_profile_" . uniqid();
-    @mkdir($profile, 0777, true);
-
+    // 7.5) converti in PDF con soffice headless
+    $profile = "$work/lo_profile_".uniqid();
+    @mkdir($profile,0777,true);
     $cmdParts = [
         $soffice,
         '--headless',
         "-env:UserInstallation=file://{$profile}",
-        '--convert-to', 'pdf',
-        '--outdir', $work,
+        '--convert-to','pdf',
+        '--outdir',$work,
         $docxPath
     ];
-    if (isWindows()) {
-        // quoting per Windows
-        $cmd = '"' . implode('" "', $cmdParts) . '" 2>&1';
+    if(isWindows()){
+        $cmd = '"'.implode('" "',$cmdParts).'" 2>&1';
     } else {
-        $cmd = implode(' ', array_map('escapeshellarg', $cmdParts)) . ' 2>&1';
+        $cmd = implode(' ',array_map('escapeshellarg',$cmdParts)).' 2>&1';
     }
-    exec($cmd, $out, $ret);
-
-    // rimuovi profilo LibreOffice
-    if (isWindows()) {
-        exec("rmdir /S /Q " . escapeshellarg($profile));
+    exec($cmd,$out,$ret);
+    // elimina profilo
+    if(isWindows()){
+        exec("rmdir /S /Q ".escapeshellarg($profile));
     } else {
-        exec("rm -rf " . escapeshellarg($profile));
+        exec("rm -rf ".escapeshellarg($profile));
+    }
+    if($ret!==0){
+        exit("Errore LibreOffice:\n".implode("\n",$out));
     }
 
-    if ($ret !== 0) {
-        exit("Errore conversione PDF (LibreOffice):\n" . implode("\n", $out));
+    // raccogli PDF e cancella DOCX
+    $pdf = preg_replace('/\.docx$/i','.pdf',$docxPath);
+    if(!file_exists($pdf)){
+        exit("PDF non generato");
     }
-
-    // 9.7) Raccogli PDF e cancella DOCX
-    $pdfPath = preg_replace('/\.docx$/i', '.pdf', $docxPath);
-    if (!file_exists($pdfPath)) {
-        exit("PDF non trovato dopo conversione");
-    }
-    $pdfFiles[] = $pdfPath;
+    $pdfFiles[] = $pdf;
     @unlink($docxPath);
 }
 
-// 10) Unisci tutti i PDF in un unico file con Ghostscript
-$finalPdf = "{$work}/registro_{$id}_" . time() . ".pdf";
+// 8) unisci PDF con Ghostscript
+$final = "$work/registro_{$id}_".time().".pdf";
 $parts = array_merge(
-    [$gs, '-dNOPAUSE', '-dBATCH', '-q', '-sDEVICE=pdfwrite', "-sOutputFile={$finalPdf}"],
+    [$gs,'-dNOPAUSE','-dBATCH','-q','-sDEVICE=pdfwrite',"-sOutputFile={$final}"],
     $pdfFiles
 );
-if (isWindows()) {
-    $cmd = '"' . implode('" "', $parts) . '" 2>&1';
+if(isWindows()){
+    $cmd = '"'.implode('" "',$parts).'" 2>&1';
 } else {
-    $cmd = implode(' ', array_map('escapeshellarg', $parts)) . ' 2>&1';
+    $cmd = implode(' ',array_map('escapeshellarg',$parts)).' 2>&1';
 }
-exec($cmd, $ogs, $rgs);
-if ($rgs !== 0 || !file_exists($finalPdf)) {
-    exit("Errore fusione PDF (Ghostscript):\n" . implode("\n", $ogs));
+exec($cmd,$ogs,$rgs);
+if($rgs!==0||!file_exists($final)){
+    exit("Errore fusione PDF:\n".implode("\n",$ogs));
 }
+foreach($pdfFiles as $f) @unlink($f);
 
-// 11) Cancella PDF intermedi
-foreach ($pdfFiles as $f) {
-    @unlink($f);
-}
-
-// 12) Invia il PDF finale all'utente
+// 9) invia all’utente
 header('Content-Type: application/pdf');
-header('Content-Disposition: attachment; filename="registro_' . $id . '.pdf"');
-readfile($finalPdf);
-@unlink($finalPdf);
+header('Content-Disposition: attachment; filename="registro_'.$id.'.pdf"');
+readfile($final);
+@unlink($final);
 exit;
