@@ -243,7 +243,7 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
         <a href="/biosound/iscrizione.php?id=<?=urlencode($a['id'])?>"
    class="icon-btn"
-   title="Genera Scheda Corso"
+   title="Genera Iscrizioni"
    target="_blank" rel="noopener">
 <i class="bi bi-file-text"></i></a>
 
