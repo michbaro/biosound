@@ -239,12 +239,21 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
         class="icon-btn"
         title="Genera Registro"
         target="_blank">
-<i class="bi bi-book"></i>        <!-- Genera PDF in nuova scheda -->
+        <i class="bi bi-book"></i></a>        <!-- Genera PDF in nuova scheda -->
+
+        <a href="/biosound/iscrizione.php?id=<?=urlencode($a['id'])?>"
+   class="icon-btn"
+   title="Genera Scheda Corso"
+   target="_blank" rel="noopener">
+<i class="bi bi-file-text"></i></a>
+
+
 <a href="/biosound/scheda_corso.php?id=<?=urlencode($a['id'])?>"
    class="icon-btn"
    title="Genera Scheda Corso"
    target="_blank" rel="noopener">
 <i class="bi bi-printer"></i></a>
+
 
         <!-- Modifica -->
           <a href="/biosound/attivita.php?id=<?=urlencode($a['id'])?>"
