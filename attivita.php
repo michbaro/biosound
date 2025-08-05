@@ -543,22 +543,6 @@ $u->execute([
     </form>
 </div>
 
-<!-- bottoni di download, centrati -->
-<div style="display:flex; justify-content:center; gap:1rem; margin-top:1.5rem;">
-  <a
-    href="scarica_registro.php?id=<?= htmlspecialchars($id, ENT_QUOTES) ?>"
-    class="btn btn-secondary"
-  >
-    <i class="bi bi-journal-text"></i> Scarica Registro
-  </a>
-  <a
-    href="iscrizione.php?id=<?= htmlspecialchars($id, ENT_QUOTES) ?>"
-    class="btn btn-secondary"
-  >
-    <i class="bi bi-file-earmark-person"></i> Scarica Schede Iscrizione
-  </a>
-</div>
-
   <div id="participant-modal" class="modal-overlay">
     <div class="modal">
       <h2>Seleziona Partecipanti</h2>
