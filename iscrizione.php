@@ -4,8 +4,8 @@ error_reporting(E_ALL);
 ini_set('display_errors','1');
 
 // 1) DB + autoload corretto
-require_once __DIR__ . '/init.php';                  // inizializza $pdo
-require_once __DIR__ . '/libs/vendor/autoload.php';   // <-- qui!
+require_once __DIR__ . '/init.php';                  
+require_once __DIR__ . '/libs/vendor/autoload.php';   
 
 use setasign\Fpdi\Fpdi;
 
@@ -16,9 +16,9 @@ if (!$idAttivita) {
     exit;
 }
 
-// 3) Dati corso
+// 3) Dati corso + flag corsoFinanziato
 $stmt = $pdo->prepare("
-  SELECT a.id, c.titolo, c.durata
+  SELECT a.id, c.titolo, c.durata, a.corsoFinanziato
     FROM attivita a
     JOIN corso c ON a.corso_id = c.id
    WHERE a.id = ?
@@ -39,28 +39,7 @@ $stmt = $pdo->prepare("
 $stmt->execute([$idAttivita]);
 $dataInizio = $stmt->fetchColumn() ?: '';
 
-// 5) Dati azienda (sede legale = quella con is_legale=1)
-$stmt = $pdo->prepare("
-  SELECT
-    az.ragionesociale,
-    az.piva,
-    COALESCE(sleg.indirizzo, '')    AS indirizzo_sede,
-    COALESCE(sleg.nome, '')         AS sede_legale,
-    az.ateco
-  FROM attivita a
-  JOIN azienda az   ON az.id = a.azienda
-  LEFT JOIN sede sleg
-    ON sleg.azienda_id = az.id
-   AND sleg.is_legale   = 1
-  WHERE a.id = ?
-");
-$stmt->execute([$idAttivita]);
-$az = $stmt->fetch(PDO::FETCH_ASSOC) ?: [
-    'ragionesociale'=>'','piva'=>'',
-    'indirizzo_sede'=>'','sede_legale'=>'','ateco'=>''
-];
-
-// 6) Partecipanti
+// 5) Partecipanti + azienda tramite sede legale
 $stmt = $pdo->prepare("
   SELECT
     d.nome,
@@ -69,19 +48,31 @@ $stmt = $pdo->prepare("
     d.datanascita,
     d.luogonascita,
     d.viaresidenza,
-    d.comuneresidenza
+    d.comuneresidenza,
+    az.ragionesociale,
+    az.piva,
+    COALESCE(s.indirizzo, '') AS indirizzo_sede,
+    COALESCE(s.nome, '')      AS sede_legale,
+    COALESCE(az.ateco, '')    AS ateco
   FROM dipendente d
   JOIN attivita_dipendente ad ON ad.dipendente_id = d.id
+  LEFT JOIN dipendente_sede ds ON ds.dipendente_id = d.id
+  LEFT JOIN sede s             ON s.id = ds.sede_id AND s.is_legale = 1
+  LEFT JOIN azienda az         ON az.id = s.azienda_id
   WHERE ad.attivita_id = ?
 ");
 $stmt->execute([$idAttivita]);
 $partecipanti = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// 6) Scegli template PDF
+$template = __DIR__ . '/resources/templates/' . (
+    $act['corsoFinanziato'] ? 'isc_fondo.pdf' : 'isc_nofondo.pdf'
+);
+
 // Se non ci sono partecipanti, scarica solo il template
 if (empty($partecipanti)) {
-    $template = __DIR__ . '/resources/templates/iscrizione.pdf';
     if (!file_exists($template)) {
-        die('Template non trovato.');
+        die('Template non trovato: ' . basename($template));
     }
     header('Content-Type: application/pdf');
     header('Content-Disposition: inline; filename="iscrizione_template.pdf"');
@@ -95,34 +86,41 @@ $pdf->SetAutoPageBreak(false);
 $pdf->SetFont('Helvetica','',10);
 $pdf->SetTextColor(0,0,0);
 
-$tplIdx = $pdf->setSourceFile(__DIR__ . '/resources/templates/iscrizione.pdf');
+if (!file_exists($template)) {
+    die('Template non trovato: ' . basename($template));
+}
+
+$tplIdx = $pdf->setSourceFile($template);
 $tpl    = $pdf->importPage(1);
 $size   = $pdf->getTemplateSize($tpl);
 
-// 8) Genera una pagina per ogni partecipante, Y originale +8
+// 8) Una pagina per ogni partecipante
 foreach ($partecipanti as $p) {
     $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
     $pdf->useTemplate($tpl);
 
-    // coordinate con offset Y = +8
-    $pdf->Text(164, 181,  $act['titolo']);                         // 173 + 8
-    $pdf->Text(138, 206,  $act['durata']);                         // 198 + 8
-    $pdf->Text(302, 207,  date('d/m/Y', strtotime($dataInizio)));  // 199 + 8
-    $pdf->Text(156, 258,  "{$p['nome']} {$p['cognome']}");         // 250 + 8
-    $pdf->Text(361, 258,  $p['codice_fiscale']);                   // 250 + 8
-    $pdf->Text(156, 278,  date('d/m/Y', strtotime($p['datanascita']))); // 270 + 8
-    $pdf->Text(370, 278,  $p['luogonascita']);                     // 270 + 8
-    $pdf->Text(189, 299,  $p['viaresidenza']);                     // 291 + 8
-    $pdf->Text(98,  322,  $p['comuneresidenza']);                  // 314 + 8
+    // Dati corso e partecipante
+    $pdf->Text(164, 181,  $act['titolo']);                             
+    $pdf->Text(138, 206,  $act['durata']);                             
+    $pdf->Text(302, 207,  date('d/m/Y', strtotime($dataInizio)));      
+    $pdf->Text(156, 258,  "{$p['nome']} {$p['cognome']}");             
+    $pdf->Text(361, 258,  $p['codice_fiscale']);                       
+    $pdf->Text(156, 278,  date('d/m/Y', strtotime($p['datanascita']))); 
+    $pdf->Text(370, 278,  $p['luogonascita']);                         
+    $pdf->Text(189, 299,  $p['viaresidenza']);                         
+    $pdf->Text(98,  322,  $p['comuneresidenza']);                      
 
-    $pdf->Text(162, 406,  $az['ragionesociale']);                   // 398 + 8
-    $pdf->Text(386, 406,  $az['piva']);                            // 398 + 8
-    $pdf->Text(194, 425,  $az['indirizzo_sede']);                  // 417 + 8
-    $pdf->Text(101, 446,  $az['sede_legale']);                     // 438 + 8
-    $pdf->Text(142, 470,  $az['ateco']);                           // 462 + 8
+    // Dati azienda se corsoFinanziato = 1
+    if ($act['corsoFinanziato']) {
+        $pdf->Text(162, 406,  $p['ragionesociale']);
+        $pdf->Text(386, 406,  $p['piva']);
+        $pdf->Text(194, 425,  $p['indirizzo_sede']);
+        $pdf->Text(101, 446,  $p['sede_legale']);
+        $pdf->Text(142, 470,  $p['ateco']);
+    }
 }
 
-// 9) Output inline
+// 9) Output PDF
 header('Content-Type: application/pdf');
 header('Content-Disposition: inline; filename="schede_iscrizione_' . $idAttivita . '.pdf"');
 $pdf->Output('I');
