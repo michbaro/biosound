@@ -2,6 +2,8 @@
 // aggiungi_azienda.php — form per aggiungere azienda + sede legale
 require_once __DIR__ . '/init.php';
 
+// Prima di usare: ALTER TABLE azienda ADD COLUMN sdi VARCHAR(50) DEFAULT NULL;
+
 $added          = false;
 $errorDuplicate = false;
 $errorDb        = false;
@@ -12,6 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $piva                 = trim($_POST['piva'] ?? '');
     $ateco                = trim($_POST['ateco'] ?? '');
     $email                = trim($_POST['email'] ?? '');
+    $sdi                  = trim($_POST['sdi'] ?? '');
     $legaleRappresentante = trim($_POST['legalerappresentante'] ?? '');
     $nomeReferente        = trim($_POST['nomereferente'] ?? '');
     $contattoReferente    = trim($_POST['contattoreferente'] ?? '');
@@ -31,11 +34,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $aziendaId    = bin2hex(random_bytes(16));
             $sedeLegaleId = bin2hex(random_bytes(16));
 
-            // 3a) Inserisco in azienda (includo subito sedelegale_id)
+            // 3a) Inserisco in azienda (includo subito sedelegale_id e sdi)
             $stmtA = $pdo->prepare(<<<'SQL'
 INSERT INTO azienda
-  (id, sedelegale_id, ragionesociale, piva, ateco, email, legalerappresentante, nomereferente, contattoreferente)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (id, sedelegale_id, ragionesociale, piva, ateco, email, sdi,
+   legalerappresentante, nomereferente, contattoreferente)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 SQL
             );
             $stmtA->execute([
@@ -45,6 +49,7 @@ SQL
                 $piva,
                 $ateco  ?: null,
                 $email  ?: null,
+                $sdi    ?: null,
                 $legaleRappresentante ?: null,
                 $nomeReferente        ?: null,
                 $contattoReferente    ?: null,
@@ -67,7 +72,6 @@ SQL
             $added = true;
         } catch (\Throwable $e) {
             $pdo->rollBack();
-            // Qui potresti loggare $e->getMessage() per il debug
             $errorDb = true;
         }
     }
@@ -177,6 +181,11 @@ SQL
         <label for="email">Email</label>
         <input id="email" name="email" type="email"
                value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
+      </div>
+      <div class="form-group">
+        <label for="sdi">SDI/PEC</label>
+        <input id="sdi" name="sdi" type="text"
+               value="<?= htmlspecialchars($_POST['sdi'] ?? '') ?>">
       </div>
       <div class="form-group">
         <label for="legalerappresentante">Legale Rappresentante</label>

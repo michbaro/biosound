@@ -1,5 +1,5 @@
 <?php
-include 'init.php'; //
+include 'init.php'; // connessione a $pdo
 $added = isset($_GET['added']);
 ?>
 <!DOCTYPE html>
@@ -77,8 +77,9 @@ $added = isset($_GET['added']);
     <input type="text" id="search" placeholder="Cerca corsi...">
 
     <?php
-      $stmt  = $pdo->query('SELECT id, titolo FROM Corso');
-      $corsi = $stmt->fetchAll();
+      // Usa il nome corretto della tabella in minuscolo
+      $stmt  = $pdo->query('SELECT id, titolo FROM corso');
+      $corsi = $stmt->fetchAll(PDO::FETCH_ASSOC);
     ?>
 
     <?php if (empty($corsi)): ?>

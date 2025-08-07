@@ -9,12 +9,19 @@ if (!$id) {
     exit;
 }
 
-// 3) Carica dati azienda
+// 3) Carica dati azienda (ora include anche il campo sdi)
 $stmt = $pdo->prepare('
-    SELECT ragionesociale, piva, ateco, email,
-           legalerappresentante, nomereferente, contattoreferente
-      FROM azienda
-     WHERE id = ?
+    SELECT
+      ragionesociale,
+      piva,
+      ateco,
+      email,
+      legalerappresentante,
+      nomereferente,
+      contattoreferente,
+      sdi
+    FROM azienda
+    WHERE id = ?
 ');
 $stmt->execute([$id]);
 $azienda = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -23,9 +30,9 @@ if (!$azienda) {
     exit;
 }
 
-$updated          = isset($_GET['updated']);
-$errorDuplicate   = false;
-$errorHasEmployees = false;
+$updated            = isset($_GET['updated']);
+$errorDuplicate     = false;
+$errorHasEmployees  = false;
 
 // 4) Gestione POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -33,11 +40,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['update'])) {
         $rs   = trim($_POST['ragionesociale'] ?? '');
         $piva = trim($_POST['piva'] ?? '');
-        $ateco= trim($_POST['ateco'] ?? '') ?: null;
-        $email= trim($_POST['email'] ?? '') ?: null;
-        $leg  = trim($_POST['legalerappresentante'] ?? '') ?: null;
-        $nome = trim($_POST['nomereferente'] ?? '') ?: null;
-        $cont = trim($_POST['contattoreferente'] ?? '') ?: null;
+        $ateco= trim($_POST['ateco'] ?? '')               ?: null;
+        $email= trim($_POST['email'] ?? '')               ?: null;
+        $sdi  = trim($_POST['sdi'] ?? '')                 ?: null;
+        $leg  = trim($_POST['legalerappresentante'] ?? '')?: null;
+        $nome = trim($_POST['nomereferente'] ?? '')       ?: null;
+        $cont = trim($_POST['contattoreferente'] ?? '')   ?: null;
 
         // verifica duplicato P.IVA (escludo l'azienda corrente)
         $dup = $pdo->prepare(
@@ -49,13 +57,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $upd = $pdo->prepare('
               UPDATE azienda SET
-                ragionesociale=?, piva=?, ateco=?, email=?,
-                legalerappresentante=?, nomereferente=?, contattoreferente=?
-              WHERE id=?
+                ragionesociale      = ?,
+                piva                = ?,
+                ateco               = ?,
+                email               = ?,
+                sdi                 = ?,
+                legalerappresentante= ?,
+                nomereferente       = ?,
+                contattoreferente   = ?
+              WHERE id = ?
             ');
             $upd->execute([
-                $rs, $piva, $ateco, $email,
-                $leg, $nome, $cont,
+                $rs,
+                $piva,
+                $ateco,
+                $email,
+                $sdi,
+                $leg,
+                $nome,
+                $cont,
                 $id
             ]);
             header('Location: /biosound/azienda.php?id='
@@ -66,7 +86,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // delete
     if (isset($_POST['delete'])) {
-        // controllo sedi con dipendenti
         $check = $pdo->prepare(<<<'SQL'
 SELECT COUNT(*) 
   FROM sede s
@@ -78,7 +97,6 @@ SQL
         if ((int)$check->fetchColumn() > 0) {
             $errorHasEmployees = true;
         } else {
-            // elimina azienda
             $pdo->prepare('DELETE FROM azienda WHERE id = ?')
                 ->execute([$id]);
             header('Location: /biosound/aziende.php?deleted=1');
@@ -207,6 +225,11 @@ SQL
         <label for="email">Email</label>
         <input id="email" name="email" type="email"
                value="<?=htmlspecialchars($azienda['email'],ENT_QUOTES)?>">
+      </div>
+      <div class="form-group">
+        <label for="sdi">SDI/PEC</label>
+        <input id="sdi" name="sdi" type="text"
+               value="<?=htmlspecialchars($azienda['sdi'],ENT_QUOTES)?>">
       </div>
       <div class="form-group">
         <label for="legalerappresentante">Legale Rappresentante</label>

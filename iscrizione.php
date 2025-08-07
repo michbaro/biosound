@@ -3,13 +3,16 @@ declare(strict_types=1);
 error_reporting(E_ALL);
 ini_set('display_errors','1');
 
+// Prima di usare questo script, eseguire in database:
+// ALTER TABLE azienda ADD COLUMN sdi VARCHAR(50) DEFAULT NULL;
+
 // 1) DB + autoload
-require_once __DIR__ . '/init.php';                  
-require_once __DIR__ . '/libs/vendor/autoload.php';   
+require_once __DIR__ . '/init.php';
+require_once __DIR__ . '/libs/vendor/autoload.php';
 
 use setasign\Fpdi\Fpdi;
 
-// 2) ID attività  
+// 2) ID attività
 $idAttivita = $_GET['id'] ?? null;
 if (!$idAttivita) {
     header('Location: attivitae.php');
@@ -41,7 +44,7 @@ $dataInizio = $stmt->fetchColumn() ?: '';
 
 // 5) Partecipanti (+ azienda solo se corsoFinanziato = 0)
 if ($act['corsoFinanziato']) {
-    // No dati azienda
+    // Corso finanziato: solo dati anagrafici
     $stmt = $pdo->prepare("
       SELECT
         d.nome,
@@ -56,7 +59,7 @@ if ($act['corsoFinanziato']) {
       WHERE ad.attivita_id = ?
     ");
 } else {
-    // Con dati azienda e sede legale
+    // Corso NON finanziato: include dati azienda + SDI
     $stmt = $pdo->prepare("
       SELECT
         d.nome,
@@ -69,8 +72,8 @@ if ($act['corsoFinanziato']) {
         az.ragionesociale,
         az.piva,
         COALESCE(s.indirizzo, '') AS indirizzo_sede,
-        COALESCE(s.nome, '')      AS sede_legale,
-        COALESCE(az.ateco, '')    AS ateco
+        COALESCE(az.ateco, '')    AS ateco,
+        COALESCE(az.sdi, '')      AS sdi
       FROM dipendente d
       JOIN attivita_dipendente ad ON ad.dipendente_id = d.id
       LEFT JOIN dipendente_sede ds ON ds.dipendente_id = d.id
@@ -84,9 +87,8 @@ $stmt->execute([$idAttivita]);
 $partecipanti = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // 6) Scegli template PDF
-$template = __DIR__ . '/resources/templates/' . (
-    $act['corsoFinanziato'] ? 'isc_fondo.pdf' : 'isc_nofondo.pdf'
-);
+$template = __DIR__ . '/resources/templates/' .
+    ($act['corsoFinanziato'] ? 'isc_fondo.pdf' : 'isc_nofondo.pdf');
 
 // Se non ci sono partecipanti, scarica solo il template
 if (empty($partecipanti)) {
@@ -119,23 +121,23 @@ foreach ($partecipanti as $p) {
     $pdf->useTemplate($tpl);
 
     // Dati corso e partecipante
-    $pdf->Text(164, 181,  $act['titolo']);                             
-    $pdf->Text(138, 206,  $act['durata']);                             
-    $pdf->Text(302, 207,  date('d/m/Y', strtotime($dataInizio)));      
-    $pdf->Text(156, 258,  "{$p['nome']} {$p['cognome']}");             
-    $pdf->Text(361, 258,  $p['codice_fiscale']);                       
-    $pdf->Text(156, 278,  date('d/m/Y', strtotime($p['datanascita']))); 
-    $pdf->Text(370, 278,  $p['luogonascita']);                         
-    $pdf->Text(189, 299,  $p['viaresidenza']);                         
-    $pdf->Text(98,  322,  $p['comuneresidenza']);                      
+    $pdf->Text(164, 181,  $act['titolo']);
+    $pdf->Text(138, 204,  $act['durata']);
+    $pdf->Text(302, 204,  date('d/m/Y', strtotime($dataInizio)));
+    $pdf->Text(156, 258,  "{$p['nome']} {$p['cognome']}");
+    $pdf->Text(361, 258,  $p['codice_fiscale']);
+    $pdf->Text(156, 278,  date('d/m/Y', strtotime($p['datanascita'])));
+    $pdf->Text(370, 278,  $p['luogonascita']);
+    $pdf->Text(189, 299,  $p['viaresidenza']);
+    $pdf->Text(180,  322,  $p['comuneresidenza']);
 
-    // Dati azienda SOLO se corso NON finanziato
+    // Dati azienda (solo se NON finanziato)
     if (!$act['corsoFinanziato']) {
-        $pdf->Text(162, 406,  $p['ragionesociale']);
-        $pdf->Text(386, 406,  $p['piva']);
-        $pdf->Text(214, 425,  $p['indirizzo_sede']); // +20px rispetto a 194
-        $pdf->Text(101, 446,  $p['sede_legale']);
-        $pdf->Text(142, 470,  $p['ateco']);
+        $pdf->Text(162, 404,  $p['ragionesociale']);
+        $pdf->Text(386, 404,  $p['piva']);
+        $pdf->Text(192, 424,  $p['indirizzo_sede']);  // nuovo posizionamento
+        $pdf->Text(143, 444,  $p['ateco']);           // nuovo posizionamento
+        $pdf->Text(386, 444,  $p['sdi']);             // campo SDI aggiunto
     }
 }
 
