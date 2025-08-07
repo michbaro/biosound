@@ -2,8 +2,6 @@
 // aggiungi_azienda.php — form per aggiungere azienda + sede legale
 require_once __DIR__ . '/init.php';
 
-// Prima di usare: ALTER TABLE azienda ADD COLUMN sdi VARCHAR(50) DEFAULT NULL;
-
 $added          = false;
 $errorDuplicate = false;
 $errorDb        = false;
@@ -17,7 +15,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $sdi                  = trim($_POST['sdi'] ?? '');
     $legaleRappresentante = trim($_POST['legalerappresentante'] ?? '');
     $nomeReferente        = trim($_POST['nomereferente'] ?? '');
-    $contattoReferente    = trim($_POST['contattoreferente'] ?? '');
+    $emailReferente       = trim($_POST['emailreferente'] ?? '');
+    $numeroReferente      = trim($_POST['numeroreferente'] ?? '');
     $indirizzoLegale      = trim($_POST['indirizzo_legale'] ?? '');
 
     // 2) Verifica P.IVA duplicata
@@ -34,12 +33,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $aziendaId    = bin2hex(random_bytes(16));
             $sedeLegaleId = bin2hex(random_bytes(16));
 
-            // 3a) Inserisco in azienda (includo subito sedelegale_id e sdi)
+            // 3a) Inserisco in azienda (includo sedelegale_id, sdi, emailreferente, numeroreferente)
             $stmtA = $pdo->prepare(<<<'SQL'
 INSERT INTO azienda
   (id, sedelegale_id, ragionesociale, piva, ateco, email, sdi,
-   legalerappresentante, nomereferente, contattoreferente)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+   legalerappresentante, nomereferente, emailreferente, numeroreferente)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 SQL
             );
             $stmtA->execute([
@@ -52,7 +51,8 @@ SQL
                 $sdi    ?: null,
                 $legaleRappresentante ?: null,
                 $nomeReferente        ?: null,
-                $contattoReferente    ?: null,
+                $emailReferente       ?: null,
+                $numeroReferente      ?: null,
             ]);
 
             // 3b) Inserisco la sede legale
@@ -108,8 +108,11 @@ SQL
     label { margin-bottom:.5rem; font-weight:500; }
     input[type="text"],
     input[type="email"] {
-      padding:.5rem .75rem; border:1px solid #ccc;
-      border-radius:var(--radius); font-size:1rem; width:100%;
+      padding:.5rem .75rem;
+      border:1px solid #ccc;
+      border-radius:var(--radius);
+      font-size:1rem;
+      width:100%;
     }
     .actions {
       display:flex; justify-content:center; gap:2rem; margin-top:1.5rem;
@@ -129,7 +132,6 @@ SQL
 </head>
 <body>
 <?php
-  // navbar dinamica
   $role = $_SESSION['role'] ?? 'utente';
   switch ($role) {
     case 'admin': include 'navbar_a.php'; break;
@@ -198,9 +200,14 @@ SQL
                value="<?= htmlspecialchars($_POST['nomereferente'] ?? '') ?>">
       </div>
       <div class="form-group">
-        <label for="contattoreferente">Contatto Referente</label>
-        <input id="contattoreferente" name="contattoreferente" type="text"
-               value="<?= htmlspecialchars($_POST['contattoreferente'] ?? '') ?>">
+        <label for="emailreferente">Email Referente</label>
+        <input id="emailreferente" name="emailreferente" type="email"
+               value="<?= htmlspecialchars($_POST['emailreferente'] ?? '') ?>">
+      </div>
+      <div class="form-group">
+        <label for="numeroreferente">Numero Referente</label>
+        <input id="numeroreferente" name="numeroreferente" type="text"
+               value="<?= htmlspecialchars($_POST['numeroreferente'] ?? '') ?>">
       </div>
       <div class="form-group">
         <label for="indirizzo_legale">Indirizzo Sede Legale *</label>

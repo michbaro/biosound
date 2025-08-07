@@ -330,7 +330,7 @@ SQL
       <!-- Richiedente & Tutor -->
       <div class="form-grid-2-2">
         <div class="form-group">
-          <label for="richiedente_id">Richiedente</label>
+          <label for="richiedente_id">Richiedente *</label>
           <select id="richiedente_id" name="richiedente_id">
             <option value="" disabled selected>— seleziona —</option>
             <?php foreach($operatoriList as $op): ?>
@@ -341,7 +341,7 @@ SQL
           </select>
         </div>
         <div class="form-group">
-          <label for="tutor_id">Tutor</label>
+          <label for="tutor_id">Tutor *</label>
           <select id="tutor_id" name="tutor_id">
             <option value="" disabled selected>— seleziona —</option>
             <?php foreach($operatoriList as $op): ?>
@@ -356,7 +356,7 @@ SQL
       <!-- Corso & Modalità -->
       <div class="form-grid-half">
         <div class="form-group">
-          <label for="corso_id">Corso</label>
+          <label for="corso_id">Corso *</label>
           <select id="corso_id" name="corso_id" required>
             <option value="" disabled selected>Seleziona corso</option>
             <?php foreach($corsiRaw as $c): ?>
@@ -371,7 +371,7 @@ SQL
           </select>
         </div>
         <div class="form-group">
-          <label for="modalita">Modalità</label>
+          <label for="modalita">Modalità *</label>
           <select id="modalita" name="modalita" required>
             <option value="" disabled selected>Seleziona modalità</option>
             <?php foreach([
@@ -453,7 +453,7 @@ SQL
 
       <!-- Incarichi / Lezioni -->
       <div class="form-group" id="incarico-section">
-        <label>Incarichi / Lezioni</label>
+        <label>Incarichi / Lezioni *</label>
         <div id="lessons">
           <div class="lesson-row">
             <select name="docente_id[]" required>
