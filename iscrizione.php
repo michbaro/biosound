@@ -56,7 +56,7 @@ if ($act['corsoFinanziato']) {
       WHERE ad.attivita_id = ?
     ");
 } else {
-    // Con dati azienda
+    // Con dati azienda e sede legale
     $stmt = $pdo->prepare("
       SELECT
         d.nome,
@@ -74,8 +74,9 @@ if ($act['corsoFinanziato']) {
       FROM dipendente d
       JOIN attivita_dipendente ad ON ad.dipendente_id = d.id
       LEFT JOIN dipendente_sede ds ON ds.dipendente_id = d.id
-      LEFT JOIN sede s             ON s.id = ds.sede_id AND s.is_legale = 1
-      LEFT JOIN azienda az         ON az.id = s.azienda_id
+      LEFT JOIN sede s1            ON s1.id = ds.sede_id
+      LEFT JOIN azienda az         ON az.id = s1.azienda_id
+      LEFT JOIN sede s             ON s.azienda_id = az.id AND s.is_legale = 1
       WHERE ad.attivita_id = ?
     ");
 }
@@ -99,7 +100,7 @@ if (empty($partecipanti)) {
 }
 
 // 7) Prepara FPDI
-$pdf    = new Fpdi('P','pt');
+$pdf = new Fpdi('P','pt');
 $pdf->SetAutoPageBreak(false);
 $pdf->SetFont('Helvetica','',10);
 $pdf->SetTextColor(0,0,0);
@@ -132,7 +133,7 @@ foreach ($partecipanti as $p) {
     if (!$act['corsoFinanziato']) {
         $pdf->Text(162, 406,  $p['ragionesociale']);
         $pdf->Text(386, 406,  $p['piva']);
-        $pdf->Text(194, 425,  $p['indirizzo_sede']);
+        $pdf->Text(214, 425,  $p['indirizzo_sede']); // +20px rispetto a 194
         $pdf->Text(101, 446,  $p['sede_legale']);
         $pdf->Text(142, 470,  $p['ateco']);
     }
