@@ -3,7 +3,7 @@ declare(strict_types=1);
 error_reporting(E_ALL);
 ini_set('display_errors','1');
 
-// 1) DB + autoload corretto
+// 1) DB + autoload
 require_once __DIR__ . '/init.php';                  
 require_once __DIR__ . '/libs/vendor/autoload.php';   
 
@@ -39,28 +39,46 @@ $stmt = $pdo->prepare("
 $stmt->execute([$idAttivita]);
 $dataInizio = $stmt->fetchColumn() ?: '';
 
-// 5) Partecipanti + azienda tramite sede legale
-$stmt = $pdo->prepare("
-  SELECT
-    d.nome,
-    d.cognome,
-    d.codice_fiscale,
-    d.datanascita,
-    d.luogonascita,
-    d.viaresidenza,
-    d.comuneresidenza,
-    az.ragionesociale,
-    az.piva,
-    COALESCE(s.indirizzo, '') AS indirizzo_sede,
-    COALESCE(s.nome, '')      AS sede_legale,
-    COALESCE(az.ateco, '')    AS ateco
-  FROM dipendente d
-  JOIN attivita_dipendente ad ON ad.dipendente_id = d.id
-  LEFT JOIN dipendente_sede ds ON ds.dipendente_id = d.id
-  LEFT JOIN sede s             ON s.id = ds.sede_id AND s.is_legale = 1
-  LEFT JOIN azienda az         ON az.id = s.azienda_id
-  WHERE ad.attivita_id = ?
-");
+// 5) Partecipanti (+ azienda solo se corsoFinanziato = 0)
+if ($act['corsoFinanziato']) {
+    // No dati azienda
+    $stmt = $pdo->prepare("
+      SELECT
+        d.nome,
+        d.cognome,
+        d.codice_fiscale,
+        d.datanascita,
+        d.luogonascita,
+        d.viaresidenza,
+        d.comuneresidenza
+      FROM dipendente d
+      JOIN attivita_dipendente ad ON ad.dipendente_id = d.id
+      WHERE ad.attivita_id = ?
+    ");
+} else {
+    // Con dati azienda
+    $stmt = $pdo->prepare("
+      SELECT
+        d.nome,
+        d.cognome,
+        d.codice_fiscale,
+        d.datanascita,
+        d.luogonascita,
+        d.viaresidenza,
+        d.comuneresidenza,
+        az.ragionesociale,
+        az.piva,
+        COALESCE(s.indirizzo, '') AS indirizzo_sede,
+        COALESCE(s.nome, '')      AS sede_legale,
+        COALESCE(az.ateco, '')    AS ateco
+      FROM dipendente d
+      JOIN attivita_dipendente ad ON ad.dipendente_id = d.id
+      LEFT JOIN dipendente_sede ds ON ds.dipendente_id = d.id
+      LEFT JOIN sede s             ON s.id = ds.sede_id AND s.is_legale = 1
+      LEFT JOIN azienda az         ON az.id = s.azienda_id
+      WHERE ad.attivita_id = ?
+    ");
+}
 $stmt->execute([$idAttivita]);
 $partecipanti = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -110,8 +128,8 @@ foreach ($partecipanti as $p) {
     $pdf->Text(189, 299,  $p['viaresidenza']);                         
     $pdf->Text(98,  322,  $p['comuneresidenza']);                      
 
-    // Dati azienda se corsoFinanziato = 1
-    if ($act['corsoFinanziato']) {
+    // Dati azienda SOLO se corso NON finanziato
+    if (!$act['corsoFinanziato']) {
         $pdf->Text(162, 406,  $p['ragionesociale']);
         $pdf->Text(386, 406,  $p['piva']);
         $pdf->Text(194, 425,  $p['indirizzo_sede']);
