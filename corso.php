@@ -1,10 +1,11 @@
 <?php
-// corso.php — visualizza/modifica + elimina corso, con campo maxpartecipanti
+// corso.php — visualizza/modifica + elimina corso, con campo maxpartecipanti e validità (anni)
 include 'init.php';
 
 $errorDuplicate   = false;
 $errorNotFound    = false;
 $maxPartecipanti  = 0;
+$validita         = null; // <-- nuovo
 
 // 1) Recupero ID originale (GET o hidden POST)
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -45,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         $id               = $c['id'];
         $titolo           = $c['titolo'];
         $durata           = $c['durata'];
+        $validita         = isset($c['validita']) ? (int)$c['validita'] : null; // <-- nuovo
         $modalita         = (int)$c['modalita'];
         $aula             = $modalita === 1 || $modalita === 2;
         $fad              = $modalita === 2 || $modalita === 0;
@@ -61,6 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete'])) {
     $id               = strtoupper(trim($_POST['id'] ?? ''));
     $titolo           = trim($_POST['titolo'] ?? '');
     $durata           = trim($_POST['durata'] ?? '');
+    $validita         = ($_POST['validita'] === '' ? null : (int)$_POST['validita']); // <-- nuovo (accetta vuoto)
     $maxPartecipanti  = intval($_POST['maxpartecipanti'] ?? 0);
     $aula             = isset($_POST['aula']);
     $fad              = isset($_POST['fad']);
@@ -106,10 +109,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete'])) {
                 }
             }
 
-            // update compreso maxpartecipanti
+            // update compreso maxpartecipanti e validita
             $stmtUp = $pdo->prepare(<<<'SQL'
 UPDATE corso
-   SET id = ?, titolo = ?, durata = ?, modalita = ?, categoria = ?, 
+   SET id = ?, titolo = ?, durata = ?, validita = ?, modalita = ?, categoria = ?, 
        tipologia = ?, programma = ?, maxpartecipanti = ?
  WHERE id = ?
 SQL
@@ -118,6 +121,7 @@ SQL
                 $id,
                 $titolo,
                 $durata,
+                $validita,      // <-- nuovo
                 $modalita,
                 $categoria,
                 $tipologia,
@@ -176,12 +180,8 @@ SQL
       cursor:pointer;
     }
     .pdf-action-item.upload input { display:none; }
-    .file-name {
-      margin-top:4px; font-size:.85rem; color:#555; font-style:italic;
-    }
-    .actions {
-      display:flex; justify-content:center; gap:3rem; margin-top:2rem;
-    }
+    .file-name { margin-top:4px; font-size:.85rem; color:#555; font-style:italic; }
+    .actions { display:flex; justify-content:center; gap:3rem; margin-top:2rem; }
     .btn {
       display:inline-flex; align-items:center; gap:.75rem;
       padding:.6rem 1.2rem; font-size:1rem; font-weight:bold;
@@ -195,34 +195,15 @@ SQL
     .btn-primary:active { background:#4b8950; }
 
     .btn-danger {
-  display: inline-flex;
-  align-items: center;
-  gap: .75rem;
-  padding: .6rem 1.2rem;
-  font-size: 1rem;
-  font-weight: bold;
-  color: #fff;
-  background: #dc3545;
-  border: none;
-  border-radius: var(--radius);
-  text-decoration: none;
-  cursor: pointer;
-  transition: background .2s, transform .15s;
-}
-
-.btn-danger:hover {
-  background: #c82333;
-  transform: translateY(-2px);
-}
-
-.btn-danger:active {
-  background: #bd2130;
-}
-
-.btn-danger:focus {
-  outline: none;
-  box-shadow: 0 0 0 .2rem rgba(220, 53, 69, 0.5);
-}  </style>
+      display:inline-flex; align-items:center; gap:.75rem;
+      padding:.6rem 1.2rem; font-size:1rem; font-weight:bold;
+      color:#fff; background:#dc3545; border:none; border-radius:var(--radius);
+      text-decoration:none; cursor:pointer; transition:background .2s, transform .15s;
+    }
+    .btn-danger:hover { background:#c82333; transform: translateY(-2px); }
+    .btn-danger:active { background:#bd2130; }
+    .btn-danger:focus { outline:none; box-shadow:0 0 0 .2rem rgba(220,53,69,.5); }
+  </style>
 </head>
 <body>
 
@@ -284,6 +265,21 @@ SQL
       </div>
     </div>
 
+    <!-- Validità + Max Partecipanti -->
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="validita">Validità (anni)</label>
+        <input id="validita" name="validita" type="number" min="0" step="1"
+               value="<?= htmlspecialchars((string)$validita, ENT_QUOTES) ?>"
+               placeholder="Es. 5 (lascia vuoto per nessuna scadenza)">
+      </div>
+      <div class="form-group">
+        <label for="maxpartecipanti">Max partecipanti</label>
+        <input id="maxpartecipanti" name="maxpartecipanti" type="number" min="0" required
+               value="<?= htmlspecialchars($maxPartecipanti, ENT_QUOTES) ?>">
+      </div>
+    </div>
+
     <!-- Categoria + Tipologia -->
     <div class="form-grid">
       <div class="form-group">
@@ -306,19 +302,12 @@ SQL
       </div>
     </div>
 
-    <!-- Max Partecipanti -->
-    <div class="form-group">
-      <label for="maxpartecipanti">Max partecipanti</label>
-      <input id="maxpartecipanti" name="maxpartecipanti" type="number" min="0" required
-             value="<?= htmlspecialchars($maxPartecipanti, ENT_QUOTES) ?>">
-    </div>
-
     <!-- Programma PDF -->
     <div class="form-group">
       <label>Programma:</label>
       <div style="display:flex; align-items:center; gap:1rem;">
         <?php if ($programmaPath): ?>
-          <a href="<?=htmlspecialchars($programmaPath,ENT_QUOTES)?>" target="_blank">
+          <a href="<?=htmlspecialchars($programmaPath,ENT_QUOTES)?>" target="_blank" rel="noopener">
             <i class="bi bi-eye-fill" style="font-size:1.5rem; color:#2e7d32;"></i>
           </a>
           <span class="file-name"><?= basename($programmaPath) ?></span>

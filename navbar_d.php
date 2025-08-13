@@ -154,6 +154,7 @@ $username = htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES, 'UTF-8');
     <a href="/biosound/aziende.php">Aziende</a>
     <a href="/biosound/dipendenti.php">Dipendenti</a>
         <a href="/biosound/operatori.php">Operatori</a>
+                <a href="/biosound/attestati.php">Attestati</a>
   </div>
 
   <div class="nav-right">
