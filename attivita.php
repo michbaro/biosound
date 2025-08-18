@@ -327,6 +327,33 @@ $u->execute([
   .btn-secondary{background:#6c757d;} .btn-primary{background:var(--pri);}
   .btn-danger{background:var(--err);}
   .btn-secondary:hover,.btn-primary:hover,.btn-danger:hover{opacity:.9;}
+  .download-buttons {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+    margin-bottom: 2rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-download {
+  display: inline-block;
+  padding: 0.6rem 1.2rem;
+  background: var(--pri, #66bb6a);
+  color: #fff;
+  font-weight: 500;
+  border-radius: var(--radius, 8px);
+  text-decoration: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.btn-download:hover {
+  background: #5aad5c;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
   </style>
 </head>
 <body>
@@ -600,6 +627,20 @@ $u->execute([
     </div>
   </div>
 
+<div class="download-buttons">
+  <a href="scarica_registro.php?id=<?=urlencode($id)?>" 
+     class="btn-download" target="_blank">
+     📘 Registro
+  </a>
+  <a href="scheda_corso.php?id=<?=urlencode($id)?>" 
+     class="btn-download" target="_blank">
+     📄 Scheda Corso
+  </a>
+  <a href="iscrizione.php?id=<?=urlencode($id)?>" 
+     class="btn-download" target="_blank">
+     📝 Iscrizioni
+  </a>
+</div>
 
 
 

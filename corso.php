@@ -34,7 +34,9 @@ $aula          = false;
 $fad           = false;
 $categoria     = '';
 $tipologia     = '';
+$normativa = '';
 $programmaPath = '';
+
 
 // 3) GET: carico dati esistenti
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -52,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         $fad              = $modalita === 2 || $modalita === 0;
         $categoria        = $c['categoria'];
         $tipologia        = $c['tipologia'];
+        $normativa = $c['normativa'] ?? '';
         $programmaPath    = $c['programma'];
         $maxPartecipanti  = (int)$c['maxpartecipanti'];
     }
@@ -70,6 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete'])) {
     $modalita         = $aula && $fad ? 2 : ($aula ? 1 : 0);
     $categoria        = $_POST['categoria'] ?? '';
     $tipologia        = $_POST['tipologia'] ?? '';
+    $normativa = trim($_POST['normativa'] ?? '');
 
     // duplicato se cambio ID
     if ($id !== $origId) {
@@ -113,22 +117,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete'])) {
             $stmtUp = $pdo->prepare(<<<'SQL'
 UPDATE corso
    SET id = ?, titolo = ?, durata = ?, validita = ?, modalita = ?, categoria = ?, 
-       tipologia = ?, programma = ?, maxpartecipanti = ?
+       tipologia = ?, programma = ?, maxpartecipanti = ?, normativa = ?
  WHERE id = ?
 SQL
-            );
-            $stmtUp->execute([
-                $id,
-                $titolo,
-                $durata,
-                $validita,      // <-- nuovo
-                $modalita,
-                $categoria,
-                $tipologia,
-                $programmaPath,
-                $maxPartecipanti,
-                $origId
-            ]);
+);
+$stmtUp->execute([
+    $id,
+    $titolo,
+    $durata,
+    $validita,
+    $modalita,
+    $categoria,
+    $tipologia,
+    $programmaPath,
+    $maxPartecipanti,
+    $normativa,
+    $origId
+]);
 
             header('Location: /biosound/corsi.php?edited=1');
             exit;
@@ -203,6 +208,15 @@ SQL
     .btn-danger:hover { background:#c82333; transform: translateY(-2px); }
     .btn-danger:active { background:#bd2130; }
     .btn-danger:focus { outline:none; box-shadow:0 0 0 .2rem rgba(220,53,69,.5); }
+    textarea {
+  width:100%;
+  padding:.5rem .75rem;
+  border:1px solid #ccc;
+  border-radius:var(--radius);
+  font-size:1rem;
+  resize:vertical;
+}
+
   </style>
 </head>
 <body>
@@ -301,6 +315,13 @@ SQL
         </select>
       </div>
     </div>
+    <!-- Normativa -->
+<div class="form-group">
+  <label for="normativa">Normativa di riferimento</label>
+  <textarea id="normativa" name="normativa" rows="4" style="width:100%;"
+            placeholder="Inserisci normativa..."><?= htmlspecialchars($normativa, ENT_QUOTES) ?></textarea>
+</div>
+
 
     <!-- Programma PDF -->
     <div class="form-group">

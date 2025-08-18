@@ -22,6 +22,7 @@ $sql = <<<SQL
   JOIN corso c           ON c.id = a.corso_id
   LEFT JOIN incarico i   ON i.attivita_id = a.id
   LEFT JOIN docenteincarico dic ON dic.incarico_id = i.id
+  WHERE a.chiuso = 0
   GROUP BY a.id, a.modalita, c.id, c.titolo, c.categoria, c.tipologia
   ORDER BY CAST(SUBSTRING_INDEX(a.id,'-',-1) AS UNSIGNED) DESC
 SQL;
@@ -214,6 +215,13 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
       </div>
     </div>
 
+    <?php if (isset($_GET['opened'])): ?>
+  <div id="toast" class="alert alert-success">
+    Attività riaperta con successo!
+  </div>
+<?php endif; ?>
+
+
     <?php if (empty($attivita)): ?>
       <p style="text-align:center;color:#666;">Nessuna attività registrata.</p>
     <?php else: foreach ($attivita as $a): ?>
@@ -235,24 +243,13 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
         <div class="actions">
 
-        <a href="scarica_registro.php?id=<?=urlencode($a['id'])?>" 
-        class="icon-btn"
-        title="Genera Registro"
-        target="_blank">
-        <i class="bi bi-book"></i></a>        <!-- Genera PDF in nuova scheda -->
-
-        <a href="/biosound/iscrizione.php?id=<?=urlencode($a['id'])?>"
+<!-- Chiudi corso -->
+<a href="/biosound/chiudi_corso.php?id=<?=urlencode($a['id'])?>"
    class="icon-btn"
-   title="Genera Iscrizioni"
-   target="_blank" rel="noopener">
-<i class="bi bi-file-text"></i></a>
+   title="Chiudi corso">
+      <i class="bi bi-lock"></i>
+</a>
 
-
-<a href="/biosound/scheda_corso.php?id=<?=urlencode($a['id'])?>"
-   class="icon-btn"
-   title="Genera Scheda Corso"
-   target="_blank" rel="noopener">
-<i class="bi bi-printer"></i></a>
 
 
         <!-- Modifica -->

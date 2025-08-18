@@ -26,6 +26,13 @@ $sediAll = $pdo->query('
   ORDER BY nome
 ')->fetchAll(PDO::FETCH_ASSOC);
 
+$attivitaList = $pdo->query('
+  SELECT a.id, a.modalita, c.titolo AS corso
+  FROM attivita a
+  JOIN corso c ON c.id = a.corso_id
+  ORDER BY a.id DESC
+')->fetchAll(PDO::FETCH_ASSOC);
+
 $dipRaw = $pdo->query(<<<'SQL'
   SELECT d.id, d.nome, d.cognome, d.codice_fiscale, ds.sede_id, s.azienda_id
     FROM dipendente d
@@ -357,6 +364,20 @@ if (!is_array($existingFiles)) $existingFiles = [];
         <input type="text" value="<?= htmlspecialchars($att['corso_titolo'],ENT_QUOTES) ?> (ID: <?= htmlspecialchars($att['corso_id'],ENT_QUOTES) ?>)" disabled>
         <input type="hidden" name="corso_id" value="<?= htmlspecialchars($att['corso_id'],ENT_QUOTES) ?>">
       </div>
+
+      <!-- Attività -->
+<div class="form-group">
+  <label for="attivita_id">Attività collegata *</label>
+  <select id="attivita_id" name="attivita_id" required>
+    <option value="">Seleziona attività</option>
+    <?php foreach($attivitaList as $a): ?>
+      <option value="<?= htmlspecialchars($a['id'],ENT_QUOTES) ?>"
+        <?= $att['attivita_id']==$a['id'] ? 'selected' : '' ?>>
+        <?= htmlspecialchars($a['id'].' — '.$a['corso'].' ('.$a['modalita'].')',ENT_QUOTES) ?>
+      </option>
+    <?php endforeach; ?>
+  </select>
+</div>
 
       <!-- Date -->
       <div class="form-grid-half">

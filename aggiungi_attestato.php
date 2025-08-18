@@ -31,6 +31,13 @@ $dipRaw = $pdo->query(<<<'SQL'
    ORDER BY d.cognome, d.nome
 SQL)->fetchAll(PDO::FETCH_ASSOC);
 
+$attivitaList = $pdo->query('
+  SELECT a.id, a.modalita, c.titolo AS corso
+  FROM attivita a
+  JOIN corso c ON c.id = a.corso_id
+  ORDER BY a.id DESC
+')->fetchAll(PDO::FETCH_ASSOC);
+
 /* =======================
    Config upload
    ======================= */
@@ -135,21 +142,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$errorMsg) {
-      $stmt = $pdo->prepare(<<<'SQL'
-        INSERT INTO attestato
-          (id, dipendente_id, corso_id, data_emissione, data_scadenza, note, allegati)
-        VALUES (?,  ?,             ?,        ?,              ?,             ?,    ?)
+$stmt = $pdo->prepare(<<<'SQL'
+  INSERT INTO attestato
+    (id, dipendente_id, corso_id, attivita_id, data_emissione, data_scadenza, note, allegati)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 SQL
-      );
-      $stmt->execute([
-        $newId,
-        $dipendente_id,
-        $corso_id,
-        $data_emissione,
-        $data_scadenza,
-        $note,
-        json_encode($filesMeta, JSON_UNESCAPED_UNICODE)
-      ]);
+);
+$stmt->execute([
+  $newId,
+  $dipendente_id,
+  $corso_id,
+  $_POST['attivita_id'],
+  $data_emissione,
+  $data_scadenza,
+  $note,
+  json_encode($filesMeta, JSON_UNESCAPED_UNICODE)
+]);
+
 
       header('Location: /biosound/attestati.php?added=1');
       exit;
@@ -161,6 +170,9 @@ SQL
 <html lang="it">
 <head>
   <meta charset="UTF-8">
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
   <title>Aggiungi Attestato</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <style>
@@ -239,7 +251,37 @@ SQL
   #files-list .meta .sub{color:#607d8b;font-size:.85rem;display:flex;gap:.5rem;align-items:center;}
   #files-list .badge{display:inline-flex;align-items:center;font-size:.75rem;border-radius:999px;padding:.15rem .5rem;border:1px solid #cfd8dc;color:#455a64;background:#f5f7f8;}
   #files-list .remove{background:none;border:none;color:#ef5350;font-size:1.1rem;cursor:pointer;}
-  </style>
+  
+  input,select,textarea {
+  width:100%;
+  padding:.5rem .75rem;
+  border:1px solid #ccc;
+  border-radius:var(--radius);
+  font-size:1rem;
+}
+
+/* Uniforma Select2 alle select standard */
+.select2-container .select2-selection--single {
+  height: 2.5rem;
+  border: 1px solid #ccc;
+  border-radius: var(--radius);
+  padding: .25rem .5rem;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__rendered {
+  color: var(--fg);
+  line-height: 1.5;
+}
+
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+  height: 100%;
+}
+
+
+</style>
 </head>
 <body>
 <?php
@@ -281,6 +323,21 @@ SQL
           <?php endforeach; ?>
         </select>
       </div>
+
+<!-- Attività -->
+<div class="form-group">
+  <label for="attivita_id">Attività (collegata al corso) *</label>
+  <select id="attivita_id" name="attivita_id" required>
+    <option value="" disabled selected>Seleziona attività</option>
+    <?php foreach($attivitaList as $a): ?>
+      <option value="<?= htmlspecialchars($a['id'],ENT_QUOTES) ?>">
+        <?= htmlspecialchars($a['id'].' — '.$a['corso'].' ('.$a['modalita'].')',ENT_QUOTES) ?>
+      </option>
+    <?php endforeach; ?>
+  </select>
+</div>
+
+
 
       <!-- Date -->
       <div class="form-grid-half">
@@ -534,6 +591,14 @@ SQL
 
   // Prima del submit, riallinea l'input ai file accumulati
   form.addEventListener('submit', ()=>{ fileInput.files = dt.files; });
+  $(document).ready(function() {
+  $('#attivita_id').select2({
+    placeholder: "Seleziona o cerca un'attività",
+    allowClear: true,
+    width: '100%'
+  });
+});
+
   </script>
 </body>
 </html>

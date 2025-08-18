@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <title>Attestato di Partecipazione</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Open+Sans&display=swap');
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  html, body {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    font-family: "Times New Roman", serif;
+  }
+  .attestato {
+    position: relative;
+    width: 210mm;
+    height: 297mm;
+    padding: 20mm;
+    box-sizing: border-box;
+    border: 6px double #d4af37; /* bordo decorativo */
+    overflow: hidden;
+  }
+  .attestato h1 {
+    text-align: center;
+    margin: 0;
+    font-size: 24pt;
+    text-transform: uppercase;
+  }
+  .attestato p {
+    margin: 6pt 0;
+    font-size: 12pt;
+    line-height: 1.4;
+    text-align: center;
+  }
+  .attestato .section {
+    margin-top: 15mm;
+  }
+  .attestato .firma {
+    position: absolute;
+    bottom: 20mm;
+    left: 20mm;
+    right: 20mm;
+    display: flex;
+    justify-content: space-between;
+    font-size: 11pt;
+  }
+</style>
+
+  </style>
+</head>
+<body>
+  <div class="attestato">
+    <h1>ATTESTATO DI PARTECIPAZIONE</h1>
+    <p>Si certifica che</p>
+
+    <div class="dati">
+      <p><strong>Nome e Cognome:</strong> {{nome}} {{cognome}}</p>
+      <p><strong>Codice Fiscale:</strong> {{codice_fiscale}}</p>
+      <p><strong>Luogo di nascita:</strong> {{citta_nascita}}</p>
+      <p><strong>Data di nascita:</strong> {{data_nascita}}</p>
+    </div>
+
+    <p>ha partecipato con profitto al seguente corso di formazione:</p>
+
+    <div class="corso">
+      <h2>{{nome_corso}}</h2>
+      <p>Durata complessiva: <strong>{{durata}} ore</strong></p>
+      <p>Periodo: dal <strong>{{data_inizio}}</strong> al <strong>{{data_fine}}</strong></p>
+      <p>Modalità: <strong>{{modalita}}</strong></p>
+      <p>Normativa: <strong>{{normativa}}</strong></p>
+    </div>
+
+    <div class="footer">
+      <p>Rilasciato in data {{oggi}}</p>
+    </div>
+
+    <div class="firma">
+      <div>Firma Docente</div>
+      <div>Firma Ente</div>
+    </div>
+  </div>
+</body>
+</html>

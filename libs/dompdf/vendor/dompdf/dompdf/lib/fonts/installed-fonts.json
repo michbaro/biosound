@@ -1,0 +1,9 @@
+{
+    "open sans": {
+        "normal": "open_sans_normal_db681fdbf640fe1e91be48917a2e7fa1"
+    },
+    "playfair display": {
+        "500": "C:\\xampp\\htdocs\\biosound\\libs\\dompdf\\vendor\\dompdf\\dompdf\/lib\/fonts\/playfair_display_500_cb55cbc4a470810400efa12ff3e51358",
+        "bold": "playfair_display_bold_966f8c39ee80301c6b1d108ac4f6abc5"
+    }
+}

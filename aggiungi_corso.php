@@ -17,6 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $modalita         = $aula && $fad ? 2 : ($aula ? 1 : 0);
     $categoria        = $_POST['categoria'] ?? '';
     $tipologia        = $_POST['tipologia'] ?? '';
+    $normativa        = trim($_POST['normativa'] ?? '');
 
     // duplicato
     $stmtDup = $pdo->prepare('SELECT COUNT(*) FROM corso WHERE UPPER(id) = ?');
@@ -47,23 +48,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // inserisci nuovo
-        $stmt = $pdo->prepare(<<<'SQL'
+$stmt = $pdo->prepare(<<<'SQL'
 INSERT INTO corso
-  (id, titolo, durata, validita, modalita, categoria, tipologia, programma, maxpartecipanti)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  (id, titolo, durata, validita, modalita, categoria, tipologia, normativa, programma, maxpartecipanti)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 SQL
-        );
-        $stmt->execute([
-            $id,
-            $titolo,
-            $durata,
-            $validita,
-            $modalita,
-            $categoria,
-            $tipologia,
-            $programmaPath,
-            $maxPartecipanti
-        ]);
+);
+$stmt->execute([
+    $id,
+    $titolo,
+    $durata,
+    $validita,
+    $modalita,
+    $categoria,
+    $tipologia,
+    $normativa,
+    $programmaPath,
+    $maxPartecipanti
+]);
+
 
         header('Location: /biosound/corsi.php?added=1');
         exit;
@@ -106,6 +109,24 @@ SQL
            font-weight:bold; color:#fff; border:none; border-radius:var(--radius); text-decoration:none; cursor:pointer; transition:background .2s,transform .15s;}
     .btn-secondary { background:#6c757d; } .btn-secondary:hover { background:#5a6268; transform:translateY(-2px); }
     .btn-primary { background:var(--pri); } .btn-primary:hover { background:#5aad5c; transform:translateY(-2px); }
+    /* Stile per textarea normativa */
+textarea {
+  width: 100%;
+  padding: .6rem .75rem;
+  border: 1px solid #ccc;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-family: var(--font);
+  resize: vertical;   /* permette di ridimensionare solo in verticale */
+  min-height: 100px;  /* altezza minima */
+  line-height: 1.4;
+}
+textarea:focus {
+  outline: none;
+  border-color: var(--pri);
+  box-shadow: 0 0 0 2px rgba(102,187,106,0.25);
+}
+
   </style>
 </head>
 <body>
@@ -180,6 +201,11 @@ SQL
         </select>
       </div>
     </div>
+        <!-- Normativa -->
+    <div class="form-group">
+  <label for="normativa">Normativa di riferimento</label>
+  <textarea id="normativa" name="normativa" rows="3" placeholder="Inserisci la normativa di riferimento"></textarea>
+</div>
     <!-- Upload PDF -->
     <div class="pdf-actions">
       <div class="pdf-action-item upload">
@@ -188,6 +214,8 @@ SQL
         <div id="programma-filename" class="file-name"></div>
       </div>
     </div>
+
+
     <!-- Bottoni -->
     <div class="actions">
       <a href="/biosound/corsi.php" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> Indietro</a>
