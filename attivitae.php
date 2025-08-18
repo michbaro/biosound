@@ -1,5 +1,5 @@
 <?php
-// attivitae.php — elenco attività con ricerca, filtri e PDF
+// attivitae.php — elenco attività con ricerca, filtri, PiP e link a attività chiuse
 include 'init.php';
 
 $added        = isset($_GET['added']);
@@ -35,7 +35,6 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
   <title>Elenco Attività</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <style>
-
 :root {
   --bg:#f0f2f5;
   --fg:#2e3a45;
@@ -44,12 +43,15 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
   --font:'Segoe UI',sans-serif;
   --pri:#66bb6a;
   --err:#d9534f;
+  --ink:#2f3a46;
+  --muted:#6b7b86;
 }
 
-    *{box-sizing:border-box;margin:0;padding:0;}
-    body{background:var(--bg);color:var(--fg);font-family:var(--font);}
-    .container{max-width:900px;margin:2rem auto;padding:0 1rem;}
-    h1{text-align:center;margin-bottom:1rem;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);}
+.container{max-width:900px;margin:2rem auto;padding:0 1rem;}
+h1{text-align:center;margin-bottom:1rem;}
+
 #toast {
   position: fixed;
   bottom: 1rem;
@@ -63,116 +65,130 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
   transition: opacity .5s ease-out;
   z-index: 1000;
 }
+#toast.alert-danger { background-color: var(--err) !important; color: #fff !important; }
 
-/* — OVERRIDE PER IL TOAST “ELIMINATO” — */
-#toast.alert-danger {
-  background-color: var(--err) !important;
-  color: #fff !important;
+/* Toolbar superiore con due bottoni */
+.toolbar {
+  display:flex;
+  justify-content:center;
+  gap:.5rem;
+  margin-bottom:1rem;
+  flex-wrap:wrap;
+}
+.toolbar .btn{
+  display:inline-flex;align-items:center;gap:.5rem;
+  background:var(--pri);color:#fff;
+  padding:.55rem 1rem;border-radius:var(--radius);
+  text-decoration:none;transition:background .2s,transform .2s;
+  box-shadow:0 2px 6px var(--shadow);
+}
+.toolbar .btn:hover{background:#5aad5c;transform:translateY(-2px);}
+.toolbar .btn-secondary{background:#6c757d;}
+.toolbar .btn-secondary:hover{background:#5f666c;}
+
+/* Filtri */
+.filter-area { display:flex; flex-direction:column; gap:.5rem; margin-bottom:1rem; }
+.filter-area input {
+  width:100%; height:2.5rem; padding:.5rem .75rem;
+  border:1px solid #ccc; border-radius:var(--radius); font-size:1rem;
+}
+.filter-row { display:flex; gap:.5rem; flex-wrap:wrap; }
+.filter-select {
+  flex: 1 1 0; min-width: 0; height:2.5rem;
+  padding:.5rem .75rem; border:1px solid #ccc; border-radius:var(--radius);
+  font-size:.9rem;
 }
 
-    .add-container{text-align:center;margin-bottom:1rem;}
-    .add-btn{
-      display:inline-flex;align-items:center;gap:.5rem;
-      background:var(--pri);color:#fff;
-      padding:.5rem 1rem;border-radius:var(--radius);
-      text-decoration:none;transition:background .2s,transform .2s;
-    }
-    .add-btn:hover{background:#5aad5c;transform:translateY(-2px);}
+/* List items */
+.item{
+  background:#fff;border-radius:var(--radius);
+  box-shadow:0 2px 6px var(--shadow);
+  padding:1rem;margin-bottom:.75rem;
+  display:flex;justify-content:space-between;align-items:center;
+  transition:transform .15s,box-shadow .15s;
+}
+.item:hover{ transform:translateY(-2px); box-shadow:0 4px 12px var(--shadow); }
+.info{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;}
+.info .id{font-weight:bold;color:var(--ink);}
+.info span{color:#666;font-size:.9rem;}
+.actions { display:flex; align-items:center; gap:.35rem; }
 
-    /* FILTRI: larghezza uguale e riga unica */
-    .filter-area {
-      display:flex; flex-direction:column; gap:.5rem;
-      margin-bottom:1rem;
-    }
-    .filter-area input {
-      width:100%; height:2.5rem;
-      padding:.5rem .75rem;
-      border:1px solid #ccc; border-radius:var(--radius);
-      font-size:1rem;
-    }
-    .filter-row {
-      display:flex;
-      gap:.5rem;
-    }
-    .filter-select {
-      flex: 1 1 0;
-      min-width: 0;
-      height:2.5rem;
-      padding:.5rem .75rem;
-      border:1px solid #ccc; border-radius:var(--radius);
-      font-size:.9rem;
-    }
+/* Icon buttons */
+.icon-btn{
+  background:none;border:none;color:var(--pri);
+  font-size:1.2rem;cursor:pointer;transition:color .2s;
+  text-decoration:none; padding:.25rem; border-radius:6px;
+}
+.icon-btn:hover{color:#5aad5c; background:rgba(102,187,106,0.08);}
 
-    .item{
-      background:#fff;border-radius:var(--radius);
-      box-shadow:0 2px 6px var(--shadow);
-      padding:1rem;margin-bottom:.75rem;
-      display:flex;justify-content:space-between;align-items:center;
-      transition:transform .15s,box-shadow .15s;
-    }
-    .item:hover{
-      transform:translateY(-2px);
-      box-shadow:0 4px 12px var(--shadow);
-    }
-    .info{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;}
-    .info .id{font-weight:bold;}
-    .info span{color:#666;font-size:.9rem;}
-    .actions {
-      display:flex;
-      align-items:center;
-      gap:.5rem;
-    }
-    .icon-btn{
-      background:none;border:none;color:var(--pri);
-      font-size:1.2rem;cursor:pointer;transition:color .2s;
-      text-decoration:none;
-    }
-    .icon-btn:hover{color:#5aad5c;}
+/* PiP menu */
+.menu { position:relative; }
+.menu-btn{
+  background:none;border:none;cursor:pointer;
+  font-size:1.25rem;color:var(--muted);
+  display:inline-flex;align-items:center;justify-content:center;
+  width:2rem;height:2rem;border-radius:8px;
+}
+.menu-btn:hover{ background:#f3f5f7; color:#26323a; }
+.menu-list{
+  position:absolute; right:0; top:calc(100% + .35rem);
+  background:#fff; border:1px solid #e6ebef; border-radius:10px;
+  box-shadow:0 12px 28px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06);
+  min-width:230px; padding:.35rem; display:none; z-index:20;
+}
+.menu.open .menu-list{ display:block; }
+.menu a{
+  display:flex; align-items:center; gap:.6rem;
+  padding:.55rem .6rem; color:#22313a; text-decoration:none;
+  border-radius:8px; transition:background .15s;
+  font-size:.95rem;
+}
+.menu a i{ font-size:1.05rem; color:#4a5a65; }
+.menu a:hover{ background:#f5f8fa; }
 
-
+/* Responsive: stack info/actions su mobile */
+@media (max-width:600px){
+  .item{flex-direction:column;align-items:stretch;gap:.75rem;}
+  .actions{justify-content:flex-end;}
+}
   </style>
 </head>
 <body>
 <?php
   $role = $_SESSION['role'] ?? 'utente';
   switch ($role) {
-    case 'admin':
-      include 'navbar_a.php';
-      break;
-    case 'dev':
-      include 'navbar_d.php';
-      break;
-    default:
-      include 'navbar.php';
+    case 'admin': include 'navbar_a.php'; break;
+    case 'dev'  : include 'navbar_d.php'; break;
+    default     : include 'navbar.php';
   }
-?>  <div class="container">
+?>
+  <div class="container">
     <h1>Elenco Attività</h1>
 
-<?php if ($added): ?>
-  <div id="toast" class="alert alert-success">
-    Attività aggiunta con successo!
-  </div>
-<?php endif; ?>
+    <?php if ($added): ?>
+      <div id="toast" class="alert alert-success">Attività aggiunta con successo!</div>
+    <?php endif; ?>
+    <?php if ($deleted): ?>
+      <div id="toast" class="alert alert-danger">Attività eliminata con successo!</div>
+    <?php endif; ?>
+    <?php if ($pdfgenerated): ?>
+      <div id="toast" class="alert alert-success">PDF generato con successo!</div>
+    <?php endif; ?>
+    <?php if (isset($_GET['opened'])): ?>
+      <div id="toast" class="alert alert-success">Attività riaperta con successo!</div>
+    <?php endif; ?>
 
-<?php if ($deleted): ?>
-  <div id="toast" class="alert-danger">
-    Attività eliminata con successo!
-  </div>
-<?php endif; ?>
-
-<?php if ($pdfgenerated): ?>
-  <div id="toast" class="alert alert-success">
-    PDF generato con successo!
-  </div>
-<?php endif; ?>
-
-
-    <div class="add-container">
-      <a href="/biosound/aggiungi_attivita.php" class="add-btn">
+    <!-- Toolbar con Aggiungi + Attività Chiuse -->
+    <div class="toolbar">
+      <a href="/biosound/aggiungi_attivita.php" class="btn">
         <i class="bi bi-plus-lg"></i> Aggiungi Attività
+      </a>
+      <a href="/biosound/attivitae_chiuse.php" class="btn btn-secondary" title="Vedi attività chiuse">
+        <i class="bi bi-archive"></i> Attività chiuse
       </a>
     </div>
 
+    <!-- FILTRI -->
     <div class="filter-area">
       <input id="search-id" type="text" placeholder="Cerca per ID…">
       <div class="filter-row">
@@ -215,13 +231,6 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
       </div>
     </div>
 
-    <?php if (isset($_GET['opened'])): ?>
-  <div id="toast" class="alert alert-success">
-    Attività riaperta con successo!
-  </div>
-<?php endif; ?>
-
-
     <?php if (empty($attivita)): ?>
       <p style="text-align:center;color:#666;">Nessuna attività registrata.</p>
     <?php else: foreach ($attivita as $a): ?>
@@ -242,37 +251,49 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
         </div>
 
         <div class="actions">
+          <!-- Chiudi corso -->
+          <a href="/biosound/chiudi_corso.php?id=<?=urlencode($a['id'])?>"
+             class="icon-btn" title="Chiudi corso">
+            <i class="bi bi-lock"></i>
+          </a>
 
-<!-- Chiudi corso -->
-<a href="/biosound/chiudi_corso.php?id=<?=urlencode($a['id'])?>"
-   class="icon-btn"
-   title="Chiudi corso">
-      <i class="bi bi-lock"></i>
-</a>
-
-
-
-        <!-- Modifica -->
+          <!-- Modifica -->
           <a href="/biosound/attivita.php?id=<?=urlencode($a['id'])?>"
-             class="icon-btn"
-             title="Modifica">
+             class="icon-btn" title="Modifica">
             <i class="bi bi-pencil"></i>
           </a>
 
-
+          <!-- PiP menu -->
+          <div class="menu">
+            <button class="menu-btn" type="button" aria-haspopup="true" aria-expanded="false" title="Altro">
+              <i class="bi bi-three-dots-vertical"></i>
+            </button>
+            <div class="menu-list" role="menu">
+              <a role="menuitem" href="/biosound/scarica_registro.php?id=<?=urlencode($a['id'])?>">
+                <i class="bi bi-journal-text"></i> Registro (PDF)
+              </a>
+              <a role="menuitem" href="/biosound/scheda_corso.php?id=<?=urlencode($a['id'])?>">
+                <i class="bi bi-file-earmark-text"></i> Scheda corso
+              </a>
+              <a role="menuitem" href="/biosound/iscrizione.php?id=<?=urlencode($a['id'])?>">
+                <i class="bi bi-person-plus"></i> Iscrizioni
+              </a>
+            </div>
+          </div>
         </div>
 
       </div>
     <?php endforeach; endif; ?>
-
   </div>
 
   <script>
+    // Toast fade
     window.addEventListener('load', () => {
       const t = document.getElementById('toast');
       if (t) setTimeout(() => t.style.opacity = '0', 2000);
     });
 
+    // Filtri
     const inputId = document.getElementById('search-id'),
           fMod    = document.getElementById('filter-modalita'),
           fCat    = document.getElementById('filter-categoria'),
@@ -306,10 +327,30 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
         item.style.display = vis ? 'flex' : 'none';
       });
     }
-
     [inputId,fMod,fCat,fTipo,fCorso,fDoc].forEach(el => {
       el.addEventListener('input', applyFilters);
       el.addEventListener('change', applyFilters);
+    });
+
+    // PiP menu: toggle e chiusura esterna / Esc
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.menu-btn');
+      const menus = document.querySelectorAll('.menu');
+      if (btn) {
+        const m = btn.closest('.menu');
+        menus.forEach(x => { if (x !== m) x.classList.remove('open'); });
+        m.classList.toggle('open');
+      } else {
+        // click fuori chiude tutti
+        if (!e.target.closest('.menu')) {
+          menus.forEach(x => x.classList.remove('open'));
+        }
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        document.querySelectorAll('.menu').forEach(x => x.classList.remove('open'));
+      }
     });
   </script>
 </body>

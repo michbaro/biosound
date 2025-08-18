@@ -627,23 +627,6 @@ $u->execute([
     </div>
   </div>
 
-<div class="download-buttons">
-  <a href="scarica_registro.php?id=<?=urlencode($id)?>" 
-     class="btn-download" target="_blank">
-     📘 Registro
-  </a>
-  <a href="scheda_corso.php?id=<?=urlencode($id)?>" 
-     class="btn-download" target="_blank">
-     📄 Scheda Corso
-  </a>
-  <a href="iscrizione.php?id=<?=urlencode($id)?>" 
-     class="btn-download" target="_blank">
-     📝 Iscrizioni
-  </a>
-</div>
-
-
-
   <script>
   const checkbox = document.querySelector('input[name="corsoFinanziato"]');
   const extraBox = document.getElementById('fondo-extra');
