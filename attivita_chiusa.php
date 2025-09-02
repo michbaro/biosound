@@ -1,5 +1,5 @@
 <?php
-// attivita_chiusa.php — vista read-only di un'attività chiusa, con riapertura e link attestati + docenti per data
+// attivita_chiusa.php — vista read-only di un'attività chiusa, con riapertura, link attestati e scheda corso PDF
 require_once __DIR__ . '/init.php';
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -13,17 +13,56 @@ if (!$id) {
 }
 
 /* =========================
+   Helpers
+========================= */
+function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
+function fmtDate($d){ if(!$d) return ''; $ts=strtotime($d); return $ts?date('d/m/Y',$ts):''; }
+function labelModalita($m){ return $m; } // già descrittiva in attivita.modalita
+
+// URL attestato: /biosound/resources/attestati/<attestato_id>/<stored>
+function attestato_url(?string $attestatoId, ?string $json) : ?string {
+  if (!$attestatoId || !$json) return null;
+  $arr = json_decode($json, true);
+  if (!is_array($arr) || empty($arr[0]['stored'])) return null;
+  $stored = $arr[0]['stored'];
+  return "/biosound/resources/attestati/{$attestatoId}/{$stored}";
+}
+
+// Trova i PDF scheda corso salvati in resources/scheda/<attivita_id>/, ordinati per mtime desc
+function list_schede_pdf(string $attivitaId): array {
+  $dir = __DIR__ . '/resources/scheda/' . $attivitaId;
+  if (!is_dir($dir)) return [];
+  $paths = glob($dir . '/*.pdf') ?: [];
+  // Ordina dal più recente
+  usort($paths, function($a,$b){ return filemtime($b) <=> filemtime($a); });
+  // Mappa in [url, name, size, mtime]
+  $baseUrl = "/biosound/resources/scheda/{$attivitaId}";
+  $out = [];
+  foreach ($paths as $p) {
+    $out[] = [
+      'url'   => $baseUrl . '/' . basename($p),
+      'name'  => basename($p),
+      'size'  => filesize($p),
+      'mtime' => filemtime($p),
+    ];
+  }
+  return $out;
+}
+
+/* =========================
    Dati attività + corso + operatori
 ========================= */
 $actStmt = $pdo->prepare(<<<'SQL'
   SELECT a.*,
-         c.titolo AS corso_titolo, c.durata AS corso_durata_ore,
-         c.categoria AS corso_categoria, c.modalita AS corso_modalita_cod,
-         c.validita AS corso_validita_anni,
+         c.titolo    AS corso_titolo,
+         c.durata    AS corso_durata_ore,
+         c.categoria AS corso_categoria,
+         c.modalita  AS corso_modalita_cod,
+         c.validita  AS corso_validita_anni,
          o1.nome AS rich_nome,  o1.cognome AS rich_cognome,
          o2.nome AS tutor_nome, o2.cognome AS tutor_cognome
   FROM attivita a
-  JOIN corso c      ON c.id = a.corso_id
+  JOIN corso c         ON c.id = a.corso_id
   LEFT JOIN operatore o1 ON o1.id = a.richiedente_id
   LEFT JOIN operatore o2 ON o2.id = a.tutor_id
   WHERE a.id = ?
@@ -36,8 +75,7 @@ if (!$act) {
 }
 
 /* =========================
-   Lezioni (minuti = end-start) + docenti per ciascuna lezione
-   (docenti presi da docenteincarico per l'incarico della lezione)
+   Lezioni con docenti (minuti = end-start)
 ========================= */
 $lezStmt = $pdo->prepare(<<<'SQL'
   SELECT
@@ -46,14 +84,11 @@ $lezStmt = $pdo->prepare(<<<'SQL'
     TIME_FORMAT(dl.oraInizio, '%H:%i') AS start,
     TIME_FORMAT(dl.oraFine,   '%H:%i') AS end,
     GREATEST(TIMESTAMPDIFF(MINUTE, dl.oraInizio, dl.oraFine), 0) AS minuti,
-    COALESCE(
-      GROUP_CONCAT(DISTINCT CONCAT(d.cognome,' ',d.nome) ORDER BY d.cognome, d.nome SEPARATOR ', '),
-      ''
-    ) AS docenti
+    GROUP_CONCAT(DISTINCT CONCAT(d.cognome, ' ', d.nome) ORDER BY d.cognome, d.nome SEPARATOR ', ') AS docenti
   FROM incarico i
   JOIN datalezione dl       ON dl.incarico_id = i.id
-  LEFT JOIN docenteincarico dic ON dic.incarico_id = i.id
-  LEFT JOIN docente d            ON d.id = dic.docente_id
+  LEFT JOIN docenteincarico di ON di.incarico_id = i.id
+  LEFT JOIN docente d          ON d.id = di.docente_id
   WHERE i.attivita_id = ?
   GROUP BY dl.id, dl.data, dl.oraInizio, dl.oraFine
   ORDER BY dl.data, dl.oraInizio
@@ -62,7 +97,7 @@ $lezStmt->execute([$id]);
 $lezioni = $lezStmt->fetchAll(PDO::FETCH_ASSOC);
 
 /* =========================
-   Partecipanti con esito, minuti totali e (eventuale) attestato
+   Partecipanti con esito, minuti totali, attestato
 ========================= */
 $partStmt = $pdo->prepare(<<<'SQL'
   SELECT d.id, d.nome, d.cognome, d.codice_fiscale,
@@ -97,20 +132,9 @@ while ($r = $presStmt->fetch(PDO::FETCH_ASSOC)) {
 }
 
 /* =========================
-   Helpers
+   Scheda corso (PDF) — elenco file nella cartella dedicata
 ========================= */
-function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
-function fmtDate($d){ if(!$d) return ''; $ts=strtotime($d); return $ts?date('d/m/Y',$ts):''; }
-function labelModalita($m){ return $m; } // già descrittiva in attivita.modalita
-
-// estrae percorso PDF dall'attestato: /resources/attestati/<attestato_id>/<stored>
-function attestato_url(?string $attestatoId, ?string $json) : ?string {
-  if (!$attestatoId || !$json) return null;
-  $arr = json_decode($json, true);
-  if (!is_array($arr) || empty($arr[0]['stored'])) return null;
-  $stored = $arr[0]['stored'];
-  return "/biosound/resources/attestati/{$attestatoId}/{$stored}";
-}
+$schede = list_schede_pdf($id);
 
 ?>
 <!DOCTYPE html>
@@ -130,6 +154,7 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
     .container{max-width:1100px;margin:32px auto;padding:0 16px}
     .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:16px}
     h1{margin:.2rem 0 1rem}
+    h3{margin:.2rem 0 1rem}
     .pill{display:inline-block;background:#eef3ff;border-radius:999px;padding:.25rem .6rem;font-weight:600;margin-right:.5rem}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .row{display:grid;grid-template-columns:200px 1fr;gap:12px;margin:.25rem 0}
@@ -139,11 +164,10 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
     table{border-collapse:collapse;width:100%;border-radius:10px;overflow:hidden}
     th,td{border:1px solid #e8e8e8;padding:.6rem;text-align:center;vertical-align:top}
     th.left,td.left{text-align:left}
+    .small{font-size:.9rem}
     .badge{display:inline-flex;align-items:center;gap:.35rem;border-radius:8px;padding:.2rem .5rem;font-weight:600}
     .badge-ok{background:#e9f7ef;color:#0a6b2b}
     .badge-no{background:#fdecea;color:#b11c1c}
-    .small{font-size:.9rem}
-    .smaller{font-size:.85rem}
     .actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:.5rem}
     .btn{display:inline-flex;align-items:center;gap:.5rem;border:0;padding:.55rem .9rem;border-radius:10px;color:#fff;cursor:pointer;text-decoration:none;font-weight:600}
     .btn-grey{background:var(--btn2)}
@@ -152,6 +176,9 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
     a.part-link{color:inherit;text-decoration:none;border-bottom:1px dotted transparent}
     a.part-link:hover{border-color:#aaa}
     .no-link{color:inherit;text-decoration:none;cursor:default}
+    .file-list{list-style:none;padding:0;margin:0}
+    .file-list li{display:flex;align-items:center;justify-content:space-between;border:1px solid #e8e8e8;border-radius:8px;padding:.5rem .75rem;margin:.4rem 0;background:#fff}
+    .file-meta{color:#6c757d;font-size:.9rem}
   </style>
 </head>
 <body>
@@ -213,7 +240,34 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
     <?php endif; ?>
   </div>
 
-  <!-- lezioni + docenti -->
+  <!-- scheda corso (PDF) -->
+  <div class="card">
+    <h3 style="margin-top:0">Scheda corso (PDF)</h3>
+    <?php if (!empty($schede)): ?>
+      <ul class="file-list">
+        <?php foreach ($schede as $file): ?>
+          <li>
+            <div>
+              <a href="<?= h($file['url']) ?>" target="_blank">
+                <i class="bi bi-filetype-pdf"></i> <?= h($file['name']) ?>
+              </a>
+              <div class="file-meta">
+                caricata il <?= date('d/m/Y H:i', $file['mtime']) ?> —
+                <?= number_format($file['size']/1024/1024, 2, ',', '.') ?> MB
+              </div>
+            </div>
+            <div>
+              <a class="btn btn-grey" href="<?= h($file['url']) ?>" target="_blank"><i class="bi bi-box-arrow-up-right"></i> Apri</a>
+            </div>
+          </li>
+        <?php endforeach; ?>
+      </ul>
+    <?php else: ?>
+      <div class="muted">Nessuna scheda corso caricata.</div>
+    <?php endif; ?>
+  </div>
+
+  <!-- lezioni con docenti -->
   <div class="card">
     <h3 style="margin-top:0">Lezioni</h3>
     <?php if ($lezioni): ?>
@@ -223,7 +277,7 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
             <th class="left">Data</th>
             <th>Orario</th>
             <th>Durata</th>
-            <th class="left">Docenti</th>
+            <th class="left">Docente/i</th>
           </tr>
         </thead>
         <tbody>
@@ -232,7 +286,7 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
               <td class="left"><?= fmtDate($dl['data']) ?></td>
               <td><?= h($dl['start'].' - '.$dl['end']) ?></td>
               <td><?= (int)$dl['minuti'] ?>′</td>
-              <td class="left"><?= $dl['docenti'] ? h($dl['docenti']) : '<span class="muted smaller">—</span>' ?></td>
+              <td class="left"><?= $dl['docenti'] ? h($dl['docenti']) : '<span class="muted">—</span>' ?></td>
             </tr>
           <?php endforeach; ?>
         </tbody>
@@ -254,9 +308,6 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
             <th>
               <?= fmtDate($dl['data']) ?><br>
               <span class="small muted"><?= h($dl['start'].'-'.$dl['end']) ?><br>(<?= (int)$dl['minuti'] ?>′)</span>
-              <?php if (!empty($dl['docenti'])): ?>
-                <br><span class="small" style="display:inline-block;margin-top:.25rem"><?= h($dl['docenti']) ?></span>
-              <?php endif; ?>
             </th>
           <?php endforeach; ?>
           <th>Totale (h)</th>

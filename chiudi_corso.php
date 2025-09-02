@@ -1,7 +1,11 @@
 <?php
-// chiudi_corso.php — selezione presenze/esito e generazione attestati (solo chi ha superato)
-// NOTE: Le ore/minuti per le presenze sono calcolati SEMPRE come (oraFine - oraInizio) per ogni data.
-//       L'attestato viene generato SOLO se "Ha superato" è selezionato (anche se le ore non raggiungono la durata del corso).
+// chiudi_corso.php — selezione presenze/esito, upload scheda corso (PDF) e generazione attestati (solo chi ha superato)
+// Regole UI:
+//  - "Tutti presenti" per singola data
+//  - "Tutti superati" globale
+//  - Auto-pass se minuti >= 75% della durata corso (override manuale possibile)
+// Note: Presenze in minuti calcolate solo come (oraFine - oraInizio) per ogni data.
+//       Attestato generato SOLO se "Ha superato" = 1 (anche sotto ore).
 
 require_once __DIR__ . '/init.php';
 require_once __DIR__ . '/libs/vendor/autoload.php';
@@ -11,7 +15,6 @@ use setasign\Fpdi\Fpdi;
 /* =======================
    Helpers
 ======================= */
-
 function fmt_it_date(?string $val): string {
   if (!$val) return '';
   $ts = strtotime($val);
@@ -19,24 +22,20 @@ function fmt_it_date(?string $val): string {
 }
 function clean_filename(string $s): string {
   $s = str_replace(' ', '_', $s);
-  return preg_replace('/[^A-Za-z0-9_\-]/', '', $s) ?: 'file';
+  return preg_replace('/[^A-Za-z0-9_\-\.]/', '', $s) ?: 'file';
 }
 function pdf_text($s) {
-  // Core font -> CP1252. Se usi TTF unicode, cambia questa funzione.
   return iconv('UTF-8','CP1252//TRANSLIT//IGNORE',(string)$s);
 }
 function uuid16(): string { return bin2hex(random_bytes(16)); }
-
 function expiry_from_today_years(int $years): string {
   $today = new DateTime('today');
   $targetYear = (int)$today->format('Y') + max(0, $years);
-  $m = (int)$today->format('n'); // 1..12
-  $d = (int)$today->format('j'); // 1..31
+  $m = (int)$today->format('n');
+  $d = (int)$today->format('j');
   $eom = (new DateTime())->setDate($targetYear, $m, 1)->modify('last day of this month');
-  $eomDay = (int)$eom->format('j');
-  $day = min($d, $eomDay);
-  $expiry = (new DateTime())->setDate($targetYear, $m, $day)->setTime(0,0,0);
-  return $expiry->format('Y-m-d');
+  $day = min($d, (int)$eom->format('j'));
+  return (new DateTime())->setDate($targetYear, $m, $day)->setTime(0,0,0)->format('Y-m-d');
 }
 
 /* =======================
@@ -110,8 +109,7 @@ if (!is_file($templatePdf)) {
 }
 
 /* =======================
-   GET: maschera selezione presenze (checkbox) + esito
-   (minuti NON editabili; contati da end-start)
+   GET: form
 ======================= */
 $isPost = ($_SERVER['REQUEST_METHOD'] === 'POST');
 if (!$isPost) {
@@ -132,7 +130,7 @@ if (!$isPost) {
       .bar{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin:.5rem 0 1rem}
       .pill{background:#eef3ff;border-radius:999px;padding:.2rem .6rem;font-weight:600}
       table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden}
-      th,td{border:1px solid #e8e8e8;padding:.5rem;text-align:center}
+      th,td{border:1px solid #e8e8e8;padding:.5rem;text-align:center;vertical-align:top}
       th.sticky{position:sticky;top:0;background:#f9fafb;z-index:2}
       th.left,td.left{text-align:left}
       .row-total{font-weight:700}
@@ -147,9 +145,54 @@ if (!$isPost) {
       .note{color:#555;font-size:.9rem}
       .alert{padding:.6rem .8rem;border-radius:8px;background:#fff3cd;color:#664d03;border:1px solid #ffecb5;margin:.5rem 0}
       small.muted{display:block;color:#6c757d}
-      /* nuovo: mini bottoni nelle intestazioni */
       .mini-btn{margin-top:.35rem;border:0;border-radius:6px;padding:.25rem .5rem;font-size:.75rem;cursor:pointer;color:#fff;background:#2e7d32}
       .mini-btn:hover{opacity:.9}
+      .upload{margin:1rem 0 .25rem}
+      .help{color:#6c757d;font-size:.9rem;margin-top:.25rem}
+
+      /* Uploader moderno compatto — identico a aggiungi_attestato.php */
+.dz{
+  position:relative;border:2px dashed #cfd8dc;background:#fff;
+  border-radius:8px;padding:1rem;text-align:center;
+  transition:all .15s;box-shadow:0 2px 6px rgba(0,0,0,0.08);
+  min-height:100px;cursor:pointer; margin-top:1rem; /* un po' di spazio sopra */
+}
+.dz:hover{border-color:var(--pri, #66bb6a);}
+.dz.dragover{border-color:var(--pri, #66bb6a);background:#eef8f0;}
+.dz input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;}
+.dz .dz-inner{pointer-events:none;}
+.dz .dz-inner i{font-size:1.8rem;color:var(--pri, #66bb6a);margin-bottom:.25rem;display:block;}
+.dz .dz-title{font-weight:600;font-size:.95rem;}
+.dz .dz-hint{color:#90a4ae;font-size:.8rem;margin-top:.15rem;}
+
+#scheda-files-list{
+  list-style:none;margin:.75rem 0 0;padding:0;
+}
+#scheda-files-list li{
+  display:grid;grid-template-columns:auto 1fr auto;
+  gap:.75rem;align-items:center;padding:.5rem .75rem;
+  border:1px solid #e0e0e0;border-radius:8px;background:#fff;
+  box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-bottom:.5rem;
+}
+#scheda-files-list .thumb{
+  width:42px;height:42px;border-radius:6px;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  background:#f5f7f8;font-size:1.25rem;color:#78909c;
+}
+#scheda-files-list .meta{display:flex;flex-direction:column;}
+#scheda-files-list .meta strong{font-size:.98rem;}
+#scheda-files-list .meta .sub{
+  color:#607d8b;font-size:.85rem;display:flex;gap:.5rem;align-items:center;
+}
+#scheda-files-list .badge{
+  display:inline-flex;align-items:center;font-size:.75rem;
+  border-radius:999px;padding:.15rem .5rem;border:1px solid #cfd8dc;
+  color:#455a64;background:#f5f7f8;
+}
+#scheda-files-list .remove{
+  background:none;border:none;color:#ef5350;font-size:1.1rem;cursor:pointer;
+}
+
     </style>
   </head>
   <body>
@@ -164,7 +207,8 @@ if (!$isPost) {
           <?php endif; ?>
         </div>
 
-        <form method="post" action="?id=<?= urlencode($id) ?>">
+        <!-- IMPORTANTE: enctype per upload PDF scheda -->
+        <form id="close-form" method="post" action="?id=<?= urlencode($id) ?>" enctype="multipart/form-data">
           <input type="hidden" name="confirm" value="1">
           <input type="hidden" name="csrf" value="<?= htmlspecialchars($_SESSION['csrf'],ENT_QUOTES) ?>">
 
@@ -172,8 +216,8 @@ if (!$isPost) {
             <span><span class="chip c-min"></span> raggiunge minimo</span>
             <span><span class="chip c-over"></span> supera minimo (avviso)</span>
             <span><span class="chip c-low"></span> sotto minimo</span>
-            <!-- nuovo: bottone globale "Tutti superati" -->
-            <button type="button" id="btn-all-pass" class="btn btn-pri" style="margin-left:auto">
+            <span style="margin-left:auto" class="muted">Regola auto-pass: ≥ <strong>75%</strong> ore (modificabile)</span>
+            <button type="button" id="btn-all-pass" class="btn btn-pri">
               <i class="bi bi-check2-all"></i> Tutti superati
             </button>
           </div>
@@ -187,7 +231,6 @@ if (!$isPost) {
                   <th class="sticky">
                     <?= fmt_it_date($dl['data']) ?><br>
                     <small class="muted"><?= htmlspecialchars($dl['start'].'-'.$dl['end'],ENT_QUOTES) ?><br>(<?= (int)$dl['minuti'] ?>′)</small>
-                    <!-- nuovo: bottone per segnare tutti presenti in questa giornata -->
                     <div>
                       <button type="button" class="mini-btn btn-all-present" data-dl="<?= htmlspecialchars($dl['id'],ENT_QUOTES) ?>">
                         Tutti presenti
@@ -201,7 +244,7 @@ if (!$isPost) {
             </thead>
             <tbody>
               <?php foreach ($partecipanti as $p): ?>
-                <tr>
+                <tr data-dip="<?= htmlspecialchars($p['id'],ENT_QUOTES) ?>">
                   <td class="left">
                     <strong><?= htmlspecialchars($p['cognome'].' '.$p['nome'],ENT_QUOTES) ?></strong>
                     <small class="muted"><?= htmlspecialchars($p['codice_fiscale'],ENT_QUOTES) ?></small>
@@ -214,11 +257,11 @@ if (!$isPost) {
                                value="1"
                                class="pres-cb"
                                data-min="<?= (int)$dl['minuti'] ?>"
-                               data-dl="<?= htmlspecialchars($dl['id'],ENT_QUOTES) ?>"><!-- nuovo: data-dl -->
+                               data-dl="<?= htmlspecialchars($dl['id'],ENT_QUOTES) ?>">
                       </label>
                     </td>
                   <?php endforeach; ?>
-                  <td class="row-total" data-dip="<?= $p['id'] ?>">0.0</td>
+                  <td class="row-total">0.0</td>
                   <td>
                     <input type="checkbox" name="pass[<?= $p['id'] ?>]" value="1" class="pass-cb">
                   </td>
@@ -227,6 +270,82 @@ if (!$isPost) {
             </tbody>
           </table>
           </div>
+
+          <!-- Upload scheda corso (PDF) -->
+<div class="form-group">
+  <label for="scheda_pdf">Scheda corso (PDF)</label>
+  <div id="scheda-dropzone" class="dz" title="Clicca o trascina qui il PDF">
+    <input type="file" id="scheda_pdf" name="scheda_pdf" accept=".pdf">
+    <div class="dz-inner">
+      <i class="bi bi-cloud-arrow-up"></i>
+      <div class="dz-title">Trascina qui il PDF o clicca</div>
+      <div class="dz-hint">Solo PDF — Max 20 MB</div>
+    </div>
+  </div>
+  <ul id="scheda-files-list"></ul>
+</div>
+<script>
+  (function(){
+    const dropzone  = document.getElementById('scheda-dropzone');
+    const input     = document.getElementById('scheda_pdf');
+    const listEl    = document.getElementById('scheda-files-list');
+    const MAX_SIZE  = 20*1024*1024; // 20MB
+
+    function renderList(file){
+      listEl.innerHTML = '';
+      if(!file) return;
+
+      const li   = document.createElement('li');
+      const th   = document.createElement('div'); th.className='thumb'; th.innerHTML='<i class="bi bi-file-earmark-pdf"></i>';
+      const meta = document.createElement('div'); meta.className='meta';
+      const name = document.createElement('strong'); name.textContent = file.name;
+      const sub  = document.createElement('div'); sub.className='sub';
+      const badge= document.createElement('span'); badge.className='badge'; badge.textContent='PDF';
+      const size = document.createElement('span'); size.textContent = prettySize(file.size);
+      sub.append(badge, size); meta.append(name, sub);
+
+      const rm   = document.createElement('button'); rm.type='button'; rm.className='remove'; rm.innerHTML='<i class="bi bi-x-circle"></i>';
+      rm.onclick = () => { input.value=''; listEl.innerHTML=''; };
+
+      li.append(th, meta, rm);
+      listEl.appendChild(li);
+    }
+
+    function prettySize(b){
+      if(b<1024) return b+' B';
+      if(b<1048576) return (b/1024).toFixed(1)+' KB';
+      return (b/1048576).toFixed(1)+' MB';
+    }
+
+    function acceptSinglePdf(fileList){
+      const f = fileList?.[0];
+      if(!f) return;
+      const ext = (f.name.split('.').pop() || '').toLowerCase();
+      if(ext !== 'pdf'){ alert('Seleziona un file PDF.'); return; }
+      if(f.size > MAX_SIZE){ alert('Il file supera 20 MB.'); return; }
+      // imposta singolo file nell’input
+      const dt = new DataTransfer();
+      dt.items.add(f);
+      input.files = dt.files;
+      renderList(f);
+    }
+
+    // Click/sfoglia
+    input.addEventListener('change', ()=> acceptSinglePdf(input.files));
+
+    // Drag & drop
+    ['dragenter','dragover'].forEach(ev=>dropzone.addEventListener(ev, e=>{
+      e.preventDefault(); dropzone.classList.add('dragover');
+    }));
+    ['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev, e=>{
+      e.preventDefault(); dropzone.classList.remove('dragover');
+    }));
+    dropzone.addEventListener('drop', e=>{
+      acceptSinglePdf(e.dataTransfer?.files);
+    });
+  })();
+</script>
+
 
           <p class="note">Le ore sono calcolate automaticamente dalla differenza tra orario di inizio e di fine per ogni data spuntata.</p>
 
@@ -239,48 +358,76 @@ if (!$isPost) {
     </div>
 
     <script>
-      // Totali per riga: somma i minuti delle lezioni selezionate (data-min)
-      const DURATA_MIN = <?= (int)$att['durata_ore'] ?> * 60; // minuti richiesti (solo per colori/avviso)
+      const DURATA_MIN = <?= (int)$att['durata_ore'] ?> * 60;      // minuti teorici corso
+      const PASS_RATIO = 0.75;                                     // soglia 75%
       const rows = document.querySelectorAll('tbody tr');
+      const form = document.getElementById('close-form');
 
-      function updateRowTotal(tr){
-        const mins = Array.from(tr.querySelectorAll('.pres-cb:checked'))
+      function getRowMinutes(tr){
+        return Array.from(tr.querySelectorAll('.pres-cb:checked'))
           .reduce((acc, cb)=> acc + parseInt(cb.getAttribute('data-min')||'0',10), 0);
-        const td = tr.querySelector('.row-total');
-        td.textContent = (mins/60).toFixed(1);
-        td.classList.remove('state-min','state-over','state-low');
+      }
+
+      function setOverride(tr){
+        const dipId = tr.getAttribute('data-dip');
+        if (!dipId) return;
+        if (!tr.querySelector('input[name="pass_override['+dipId+']"]')) {
+          const h = document.createElement('input');
+          h.type = 'hidden';
+          h.name = 'pass_override['+dipId+']';
+          h.value = '1';
+          form.appendChild(h);
+        }
+        tr.dataset.override = '1';
+      }
+
+      function updateRow(tr){
+        const mins = getRowMinutes(tr);
+        const tdTotal = tr.querySelector('.row-total');
+        const passCb  = tr.querySelector('.pass-cb');
+
+        tdTotal.textContent = (mins/60).toFixed(1);
+        tdTotal.classList.remove('state-min','state-over','state-low');
         if (DURATA_MIN > 0) {
-          if (mins === DURATA_MIN) td.classList.add('state-min');
-          else if (mins > DURATA_MIN) td.classList.add('state-over');
-          else td.classList.add('state-low');
+          if      (mins === DURATA_MIN) tdTotal.classList.add('state-min');
+          else if (mins >  DURATA_MIN)  tdTotal.classList.add('state-over');
+          else                          tdTotal.classList.add('state-low');
+        }
+
+        if (DURATA_MIN > 0 && tr.dataset.override !== '1') {
+          const meets = mins >= Math.ceil(DURATA_MIN * PASS_RATIO);
+          passCb.checked = meets;
         }
       }
 
       rows.forEach(tr=>{
         tr.querySelectorAll('.pres-cb').forEach(cb=>{
-          cb.addEventListener('change', ()=> updateRowTotal(tr));
+          cb.addEventListener('change', ()=> updateRow(tr));
         });
-        updateRowTotal(tr);
+        const passCb = tr.querySelector('.pass-cb');
+        passCb.addEventListener('change', ()=> setOverride(tr));
+        updateRow(tr);
       });
 
-      // ===== nuovo: "Tutti presenti" per colonna (giornata) =====
       document.querySelectorAll('.btn-all-present').forEach(btn => {
         btn.addEventListener('click', () => {
           const dlId = btn.getAttribute('data-dl');
           document.querySelectorAll('.pres-cb[data-dl="'+dlId+'"]').forEach(cb => {
             if (!cb.checked) {
               cb.checked = true;
-              cb.dispatchEvent(new Event('change', { bubbles: true })); // aggiorna i totali
+              cb.dispatchEvent(new Event('change', { bubbles: true }));
             }
           });
-          // come sicurezza, ricalcola tutti i totali
-          rows.forEach(updateRowTotal);
+          rows.forEach(updateRow);
         });
       });
 
-      // ===== nuovo: "Tutti superati" =====
       document.getElementById('btn-all-pass')?.addEventListener('click', () => {
-        document.querySelectorAll('.pass-cb').forEach(cb => cb.checked = true);
+        rows.forEach(tr => {
+          const passCb = tr.querySelector('.pass-cb');
+          if (passCb && !passCb.checked) passCb.checked = true;
+          setOverride(tr);
+        });
       });
     </script>
   </body>
@@ -290,30 +437,31 @@ if (!$isPost) {
 }
 
 /* =======================
-   POST: salva presenze/esito, genera attestati SOLO per "superato", chiudi
+   POST: salva presenze/esito, gestisci upload scheda, genera attestati, chiudi
 ======================= */
 if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) {
   http_response_code(403); exit('CSRF non valido');
 }
 unset($_SESSION['csrf']);
 
-$pres = $_POST['pres'] ?? []; // [dlId][dipId] => 1
-$pass = $_POST['pass'] ?? []; // [dipId] => 1
+$pres = $_POST['pres'] ?? [];          // [dlId][dipId] => 1
+$pass = $_POST['pass'] ?? [];          // [dipId] => 1
+$override = $_POST['pass_override'] ?? []; // [dipId] => 1
 
-// Mappa minuti per lezione (sempre calcolati end-start)
+// Mappa minuti per lezione
 $durMap = [];
 foreach ($lezioni as $dl) $durMap[$dl['id']] = (int)$dl['minuti'];
 $requiredMin = max(0,(int)$att['durata_ore']*60);
 $warn = [];
+$savedScheda = null;
 
 try {
   $pdo->beginTransaction();
 
-  // Lock attività per evitare doppie chiusure
+  // Lock attività per evitare doppie chiusure simultanee
   $lock = $pdo->prepare('SELECT chiuso FROM attivita WHERE id=? FOR UPDATE');
   $lock->execute([$id]);
-  $already = (int)$lock->fetchColumn();
-  if ($already === 1) {
+  if ((int)$lock->fetchColumn() === 1) {
     $pdo->rollBack();
     header('Location: /biosound/attivitae_chiuse.php?closed=1&already=1');
     exit;
@@ -324,7 +472,6 @@ try {
   $pdo->prepare('DELETE FROM attivita_esito    WHERE attivita_id=?')->execute([$id]);
 
   // Inserisci presenze (minuti = durMap) ed esito
-  $sumByDip = [];
   foreach ($partecipanti as $p) {
     $dipId = $p['id'];
     $sum = 0;
@@ -332,7 +479,7 @@ try {
     foreach ($lezioni as $dl) {
       $dlId = $dl['id'];
       if (isset($pres[$dlId][$dipId])) {
-        $m = $durMap[$dlId] ?? 0;               // <-- minuti solo da end-start
+        $m = $durMap[$dlId] ?? 0;
         if ($m > 0) {
           $pdo->prepare('INSERT INTO lezione_presenza (id, attivita_id, datalezione_id, dipendente_id, presente, minuti)
                          VALUES (?,?,?,?,1,?)')
@@ -342,16 +489,58 @@ try {
       }
     }
 
-    $sumByDip[$dipId] = $sum;
+    // regola 75% con override
+    $hasOverride = isset($override[$dipId]);
+    if ($hasOverride) {
+      $superato = isset($pass[$dipId]) ? 1 : 0;
+    } else {
+      $meets75 = ($requiredMin > 0) ? ($sum >= ceil($requiredMin * 0.75)) : false;
+      $superato = isset($pass[$dipId]) ? 1 : ($meets75 ? 1 : 0);
+    }
 
-    $superato = isset($pass[$dipId]) ? 1 : 0;
     $pdo->prepare('INSERT INTO attivita_esito (attivita_id, dipendente_id, superato, minuti_totali)
                    VALUES (?,?,?,?)')
         ->execute([$id, $dipId, $superato, $sum]);
 
-    // Solo avviso (non blocca nulla)
     if ($requiredMin > 0 && $sum > $requiredMin) {
       $warn[] = "{$p['cognome']} {$p['nome']}: " . number_format($sum/60,1,',','.') . " h > corso " . number_format($requiredMin/60,1,',','.') . " h";
+    }
+  }
+
+  // ===== Upload PDF scheda corso (opzionale) =====
+  if (!empty($_FILES['scheda']) && is_array($_FILES['scheda']) && $_FILES['scheda']['error'] !== UPLOAD_ERR_NO_FILE) {
+    $f = $_FILES['scheda'];
+    if ($f['error'] === UPLOAD_ERR_OK && $f['size'] > 0) {
+      // limite soft 20MB
+      if ($f['size'] > 20 * 1024 * 1024) {
+        throw new RuntimeException('Il PDF della scheda supera i 20 MB.');
+      }
+      // controllo MIME reale
+      $finfo = new finfo(FILEINFO_MIME_TYPE);
+      $mime = $finfo->file($f['tmp_name']) ?: '';
+      $extOk = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION)) === 'pdf';
+      if ($mime !== 'application/pdf' || !$extOk) {
+        throw new RuntimeException('La scheda corso deve essere un PDF valido.');
+      }
+      // path destinazione
+      $dir = __DIR__ . '/resources/scheda/' . $id;
+      if (!is_dir($dir)) {
+        if (!mkdir($dir, 0775, true) && !is_dir($dir)) {
+          throw new RuntimeException('Impossibile creare la cartella scheda corso.');
+        }
+      }
+      $ts = date('Ymd_His');
+      $base = clean_filename(pathinfo($f['name'], PATHINFO_FILENAME));
+      $dest = $dir . '/scheda_corso-' . $ts . '-' . $base . '.pdf';
+      if (!move_uploaded_file($f['tmp_name'], $dest)) {
+        throw new RuntimeException('Salvataggio del PDF scheda corso fallito.');
+      }
+      $savedScheda = $dest; // solo informativo; nessun salvataggio DB richiesto
+    } else {
+      // errori noti
+      if ($f['error'] !== UPLOAD_ERR_NO_FILE) {
+        throw new RuntimeException('Errore upload scheda corso (codice '.$f['error'].').');
+      }
     }
   }
 
@@ -359,17 +548,16 @@ try {
 } catch (Throwable $e) {
   if ($pdo->inTransaction()) $pdo->rollBack();
   http_response_code(500);
-  echo "<pre>Errore salvataggio presenze/esito:\n".htmlspecialchars($e->getMessage(),ENT_QUOTES)."</pre>";
+  echo "<pre>Errore salvataggio presenze/esito o upload scheda:\n".htmlspecialchars($e->getMessage(),ENT_QUOTES)."</pre>";
   exit;
 }
 
 /* =======================
-   Generazione attestati (SOLO superato; non importa il totale ore)
+   Generazione attestati (SOLO superato)
 ======================= */
 $oggiIT = date('d/m/Y');
-$emissioneYmd = date('Y-m-d');
 
-/* intervallo attività per stampa in attestato */
+/* intervallo attività per attestato */
 $dfStmt = $pdo->prepare(<<<'SQL'
   SELECT MIN(dl.data) AS data_inizio, MAX(dl.data) AS data_fine
   FROM incarico i
@@ -378,7 +566,6 @@ $dfStmt = $pdo->prepare(<<<'SQL'
 SQL);
 $dfStmt->execute([$id]);
 $df = $dfStmt->fetch(PDO::FETCH_ASSOC);
-$baseScadenzaYmd = $df['data_fine'] ?? $emissioneYmd;
 
 $written = [];
 try {
@@ -398,16 +585,14 @@ SQL);
     $dipId = $p['id'];
     $es = $esiti[$dipId] ?? null;
     if (!$es) continue;
-
-    // Genera solo se superato=1
     if ((int)$es['superato'] !== 1) continue;
 
-    // evita doppioni per attività/dipendente
+    // evita doppioni
     $exists = $pdo->prepare('SELECT id FROM attestato WHERE attivita_id = ? AND dipendente_id = ? LIMIT 1');
     $exists->execute([$id, $dipId]);
     if ($exists->fetchColumn()) continue;
 
-    // calcolo scadenza dal corso.validita (giorno/mese oggi, anno = oggi+validita)
+    // scadenza: giorno/mese oggi, anno = oggi + validita
     $validitaAnni = (int)($att['validita_anni'] ?? 0);
     $scadenzaYmd  = $validitaAnni > 0 ? expiry_from_today_years($validitaAnni) : null;
     $scadenzaIT   = $scadenzaYmd ? fmt_it_date($scadenzaYmd) : '—';
@@ -494,10 +679,13 @@ SQL);
 }
 
 /* =======================
-   Redirect + eventuali avvisi ore eccedenti
+   Redirect + avvisi
 ======================= */
 if (!empty($warn)) {
   $_SESSION['__chiusura_warn__'] = $warn;
+}
+if ($savedScheda) {
+  $_SESSION['__scheda_saved__'] = basename($savedScheda);
 }
 header('Location: /biosound/attivitae_chiuse.php?closed=1');
 exit;
