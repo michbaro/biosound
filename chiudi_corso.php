@@ -147,52 +147,37 @@ if (!$isPost) {
       small.muted{display:block;color:#6c757d}
       .mini-btn{margin-top:.35rem;border:0;border-radius:6px;padding:.25rem .5rem;font-size:.75rem;cursor:pointer;color:#fff;background:#2e7d32}
       .mini-btn:hover{opacity:.9}
-      .upload{margin:1rem 0 .25rem}
-      .help{color:#6c757d;font-size:.9rem;margin-top:.25rem}
 
-      /* Uploader moderno compatto — identico a aggiungi_attestato.php */
-.dz{
-  position:relative;border:2px dashed #cfd8dc;background:#fff;
-  border-radius:8px;padding:1rem;text-align:center;
-  transition:all .15s;box-shadow:0 2px 6px rgba(0,0,0,0.08);
-  min-height:100px;cursor:pointer; margin-top:1rem; /* un po' di spazio sopra */
-}
-.dz:hover{border-color:var(--pri, #66bb6a);}
-.dz.dragover{border-color:var(--pri, #66bb6a);background:#eef8f0;}
-.dz input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;}
-.dz .dz-inner{pointer-events:none;}
-.dz .dz-inner i{font-size:1.8rem;color:var(--pri, #66bb6a);margin-bottom:.25rem;display:block;}
-.dz .dz-title{font-weight:600;font-size:.95rem;}
-.dz .dz-hint{color:#90a4ae;font-size:.8rem;margin-top:.15rem;}
+      /* Uploader moderno compatto — uguale a aggiungi_attestato.php (verde successo, minimal) */
+      .dz{
+        position:relative;border:2px dashed #cfd8dc;background:#fff;
+        border-radius:8px;padding:1rem;text-align:center;
+        transition:all .15s;box-shadow:0 2px 6px rgba(0,0,0,0.08);
+        min-height:100px;cursor:pointer; margin-top:1rem; /* spazio sopra */
+      }
+      .dz:hover{border-color:var(--pri, #66bb6a);}
+      .dz.dragover{border-color:var(--pri, #66bb6a);background:#eef8f0;}
+      .dz input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;}
+      .dz .dz-inner{pointer-events:none;}
+      .dz .dz-inner i{font-size:1.8rem;color:var(--pri, #66bb6a);margin-bottom:.25rem;display:block;}
+      .dz .dz-title{font-weight:600;font-size:.95rem;}
+      .dz .dz-hint{color:#90a4ae;font-size:.8rem;margin-top:.15rem;}
 
-#scheda-files-list{
-  list-style:none;margin:.75rem 0 0;padding:0;
-}
-#scheda-files-list li{
-  display:grid;grid-template-columns:auto 1fr auto;
-  gap:.75rem;align-items:center;padding:.5rem .75rem;
-  border:1px solid #e0e0e0;border-radius:8px;background:#fff;
-  box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-bottom:.5rem;
-}
-#scheda-files-list .thumb{
-  width:42px;height:42px;border-radius:6px;overflow:hidden;
-  display:flex;align-items:center;justify-content:center;
-  background:#f5f7f8;font-size:1.25rem;color:#78909c;
-}
-#scheda-files-list .meta{display:flex;flex-direction:column;}
-#scheda-files-list .meta strong{font-size:.98rem;}
-#scheda-files-list .meta .sub{
-  color:#607d8b;font-size:.85rem;display:flex;gap:.5rem;align-items:center;
-}
-#scheda-files-list .badge{
-  display:inline-flex;align-items:center;font-size:.75rem;
-  border-radius:999px;padding:.15rem .5rem;border:1px solid #cfd8dc;
-  color:#455a64;background:#f5f7f8;
-}
-#scheda-files-list .remove{
-  background:none;border:none;color:#ef5350;font-size:1.1rem;cursor:pointer;
-}
-
+      #scheda-files-list{list-style:none;margin:.75rem 0 0;padding:0;}
+      #scheda-files-list li{
+        display:grid;grid-template-columns:auto 1fr auto;gap:.75rem;align-items:center;
+        padding:.5rem .75rem;border:1px solid #e0e0e0;border-radius:8px;background:#fff;
+        box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-bottom:.5rem;
+      }
+      #scheda-files-list .thumb{
+        width:42px;height:42px;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;
+        background:#f5f7f8;font-size:1.25rem;color:#78909c;
+      }
+      #scheda-files-list .meta{display:flex;flex-direction:column;}
+      #scheda-files-list .meta strong{font-size:.98rem;}
+      #scheda-files-list .meta .sub{color:#607d8b;font-size:.85rem;display:flex;gap:.5rem;align-items:center;}
+      #scheda-files-list .badge{display:inline-flex;align-items:center;font-size:.75rem;border-radius:999px;padding:.15rem .5rem;border:1px solid #cfd8dc;color:#455a64;background:#f5f7f8;}
+      #scheda-files-list .remove{background:none;border:none;color:#ef5350;font-size:1.1rem;cursor:pointer;}
     </style>
   </head>
   <body>
@@ -216,7 +201,7 @@ if (!$isPost) {
             <span><span class="chip c-min"></span> raggiunge minimo</span>
             <span><span class="chip c-over"></span> supera minimo (avviso)</span>
             <span><span class="chip c-low"></span> sotto minimo</span>
-            <span style="margin-left:auto" class="muted">Regola auto-pass: ≥ <strong>75%</strong> ore (modificabile)</span>
+            <span style="margin-left:auto" class="muted">Auto-pass ≥ <strong>75%</strong> ore (modificabile)</span>
             <button type="button" id="btn-all-pass" class="btn btn-pri">
               <i class="bi bi-check2-all"></i> Tutti superati
             </button>
@@ -272,80 +257,70 @@ if (!$isPost) {
           </div>
 
           <!-- Upload scheda corso (PDF) -->
-<div class="form-group">
-  <label for="scheda_pdf">Scheda corso (PDF)</label>
-  <div id="scheda-dropzone" class="dz" title="Clicca o trascina qui il PDF">
-    <input type="file" id="scheda_pdf" name="scheda_pdf" accept=".pdf">
-    <div class="dz-inner">
-      <i class="bi bi-cloud-arrow-up"></i>
-      <div class="dz-title">Trascina qui il PDF o clicca</div>
-      <div class="dz-hint">Solo PDF — Max 20 MB</div>
-    </div>
-  </div>
-  <ul id="scheda-files-list"></ul>
-</div>
-<script>
-  (function(){
-    const dropzone  = document.getElementById('scheda-dropzone');
-    const input     = document.getElementById('scheda_pdf');
-    const listEl    = document.getElementById('scheda-files-list');
-    const MAX_SIZE  = 20*1024*1024; // 20MB
+          <div class="form-group">
+            <label for="scheda_pdf">Scheda corso (PDF)</label>
+            <div id="scheda-dropzone" class="dz" title="Clicca o trascina qui il PDF">
+              <input type="file" id="scheda_pdf" name="scheda_pdf" accept=".pdf">
+              <div class="dz-inner">
+                <i class="bi bi-cloud-arrow-up"></i>
+                <div class="dz-title">Trascina qui il PDF o clicca</div>
+                <div class="dz-hint">Solo PDF — Max 20 MB</div>
+              </div>
+            </div>
+            <ul id="scheda-files-list"></ul>
+          </div>
 
-    function renderList(file){
-      listEl.innerHTML = '';
-      if(!file) return;
+          <script>
+            (function(){
+              const dropzone  = document.getElementById('scheda-dropzone');
+              const input     = document.getElementById('scheda_pdf');
+              const listEl    = document.getElementById('scheda-files-list');
+              const MAX_SIZE  = 20*1024*1024; // 20MB
 
-      const li   = document.createElement('li');
-      const th   = document.createElement('div'); th.className='thumb'; th.innerHTML='<i class="bi bi-file-earmark-pdf"></i>';
-      const meta = document.createElement('div'); meta.className='meta';
-      const name = document.createElement('strong'); name.textContent = file.name;
-      const sub  = document.createElement('div'); sub.className='sub';
-      const badge= document.createElement('span'); badge.className='badge'; badge.textContent='PDF';
-      const size = document.createElement('span'); size.textContent = prettySize(file.size);
-      sub.append(badge, size); meta.append(name, sub);
+              function renderList(file){
+                listEl.innerHTML = '';
+                if(!file) return;
 
-      const rm   = document.createElement('button'); rm.type='button'; rm.className='remove'; rm.innerHTML='<i class="bi bi-x-circle"></i>';
-      rm.onclick = () => { input.value=''; listEl.innerHTML=''; };
+                const li   = document.createElement('li');
+                const th   = document.createElement('div'); th.className='thumb'; th.innerHTML='<i class="bi bi-file-earmark-pdf"></i>';
+                const meta = document.createElement('div'); meta.className='meta';
+                const name = document.createElement('strong'); name.textContent = file.name;
+                const sub  = document.createElement('div'); sub.className='sub';
+                const badge= document.createElement('span'); badge.className='badge'; badge.textContent='PDF';
+                const size = document.createElement('span'); size.textContent = prettySize(file.size);
+                sub.append(badge, size); meta.append(name, sub);
 
-      li.append(th, meta, rm);
-      listEl.appendChild(li);
-    }
+                const rm   = document.createElement('button'); rm.type='button'; rm.className='remove'; rm.innerHTML='<i class="bi bi-x-circle"></i>';
+                rm.onclick = () => { input.value=''; listEl.innerHTML=''; };
 
-    function prettySize(b){
-      if(b<1024) return b+' B';
-      if(b<1048576) return (b/1024).toFixed(1)+' KB';
-      return (b/1048576).toFixed(1)+' MB';
-    }
+                li.append(th, meta, rm);
+                listEl.appendChild(li);
+              }
 
-    function acceptSinglePdf(fileList){
-      const f = fileList?.[0];
-      if(!f) return;
-      const ext = (f.name.split('.').pop() || '').toLowerCase();
-      if(ext !== 'pdf'){ alert('Seleziona un file PDF.'); return; }
-      if(f.size > MAX_SIZE){ alert('Il file supera 20 MB.'); return; }
-      // imposta singolo file nell’input
-      const dt = new DataTransfer();
-      dt.items.add(f);
-      input.files = dt.files;
-      renderList(f);
-    }
+              function prettySize(b){
+                if(b<1024) return b+' B';
+                if(b<1048576) return (b/1024).toFixed(1)+' KB';
+                return (b/1048576).toFixed(1)+' MB';
+              }
 
-    // Click/sfoglia
-    input.addEventListener('change', ()=> acceptSinglePdf(input.files));
+              function acceptSinglePdf(fileList){
+                const f = fileList?.[0];
+                if(!f) return;
+                const ext = (f.name.split('.').pop() || '').toLowerCase();
+                if(ext !== 'pdf'){ alert('Seleziona un file PDF.'); return; }
+                if(f.size > MAX_SIZE){ alert('Il file supera 20 MB.'); return; }
+                const dt = new DataTransfer();
+                dt.items.add(f);
+                input.files = dt.files;
+                renderList(f);
+              }
 
-    // Drag & drop
-    ['dragenter','dragover'].forEach(ev=>dropzone.addEventListener(ev, e=>{
-      e.preventDefault(); dropzone.classList.add('dragover');
-    }));
-    ['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev, e=>{
-      e.preventDefault(); dropzone.classList.remove('dragover');
-    }));
-    dropzone.addEventListener('drop', e=>{
-      acceptSinglePdf(e.dataTransfer?.files);
-    });
-  })();
-</script>
-
+              input.addEventListener('change', ()=> acceptSinglePdf(input.files));
+              ['dragenter','dragover'].forEach(ev=>dropzone.addEventListener(ev, e=>{ e.preventDefault(); dropzone.classList.add('dragover'); }));
+              ['dragleave','drop'].forEach(ev=>dropzone.addEventListener(ev, e=>{ e.preventDefault(); dropzone.classList.remove('dragover'); }));
+              dropzone.addEventListener('drop', e=>{ acceptSinglePdf(e.dataTransfer?.files); });
+            })();
+          </script>
 
           <p class="note">Le ore sono calcolate automaticamente dalla differenza tra orario di inizio e di fine per ogni data spuntata.</p>
 
@@ -444,8 +419,8 @@ if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) {
 }
 unset($_SESSION['csrf']);
 
-$pres = $_POST['pres'] ?? [];          // [dlId][dipId] => 1
-$pass = $_POST['pass'] ?? [];          // [dipId] => 1
+$pres = $_POST['pres'] ?? [];              // [dlId][dipId] => 1
+$pass = $_POST['pass'] ?? [];              // [dipId] => 1
 $override = $_POST['pass_override'] ?? []; // [dipId] => 1
 
 // Mappa minuti per lezione
@@ -508,21 +483,27 @@ try {
   }
 
   // ===== Upload PDF scheda corso (opzionale) =====
-  if (!empty($_FILES['scheda']) && is_array($_FILES['scheda']) && $_FILES['scheda']['error'] !== UPLOAD_ERR_NO_FILE) {
-    $f = $_FILES['scheda'];
+  // *** FIX: name corretto 'scheda_pdf' come nel form ***
+  if (!empty($_FILES['scheda_pdf']) && is_array($_FILES['scheda_pdf']) && ($_FILES['scheda_pdf']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+    $f = $_FILES['scheda_pdf'];
+    // log minimale utile in caso di problemi
+    error_log("[CHIUDI scheda] err=" . ($f['error'] ?? 'n/a') . " size=" . ($f['size'] ?? 'n/a') . " name=" . ($f['name'] ?? 'n/a') . " tmp=" . ($f['tmp_name'] ?? 'n/a'));
+
     if ($f['error'] === UPLOAD_ERR_OK && $f['size'] > 0) {
-      // limite soft 20MB
       if ($f['size'] > 20 * 1024 * 1024) {
         throw new RuntimeException('Il PDF della scheda supera i 20 MB.');
       }
-      // controllo MIME reale
-      $finfo = new finfo(FILEINFO_MIME_TYPE);
-      $mime = $finfo->file($f['tmp_name']) ?: '';
+      // MIME reale
+      $mime = '';
+      if (function_exists('finfo_open')) {
+        $finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $mime  = $finfo ? (finfo_file($finfo, $f['tmp_name']) ?: '') : '';
+        if ($finfo) finfo_close($finfo);
+      }
       $extOk = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION)) === 'pdf';
-      if ($mime !== 'application/pdf' || !$extOk) {
+      if (($mime && $mime !== 'application/pdf') || !$extOk) {
         throw new RuntimeException('La scheda corso deve essere un PDF valido.');
       }
-      // path destinazione
       $dir = __DIR__ . '/resources/scheda/' . $id;
       if (!is_dir($dir)) {
         if (!mkdir($dir, 0775, true) && !is_dir($dir)) {
@@ -535,10 +516,10 @@ try {
       if (!move_uploaded_file($f['tmp_name'], $dest)) {
         throw new RuntimeException('Salvataggio del PDF scheda corso fallito.');
       }
-      $savedScheda = $dest; // solo informativo; nessun salvataggio DB richiesto
+      @chmod($dest, 0664);
+      $savedScheda = $dest; // informativo
     } else {
-      // errori noti
-      if ($f['error'] !== UPLOAD_ERR_NO_FILE) {
+      if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
         throw new RuntimeException('Errore upload scheda corso (codice '.$f['error'].').');
       }
     }
