@@ -1,6 +1,10 @@
 <?php
-// attivitae_chiuse.php — elenco attività CHIUSE con ricerca, filtri e popup di visualizzazione
-include 'init.php';
+// attivitae_chiuse.php — elenco attività CHIUSE con ricerca/filtri e link a attivita_chiusa.php
+require_once __DIR__ . '/init.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+  session_start();
+}
 
 $added        = isset($_GET['added']);
 $deleted      = isset($_GET['deleted']);
@@ -20,14 +24,16 @@ $sql = <<<SQL
     c.tipologia,
     GROUP_CONCAT(DISTINCT dic.docente_id) AS docenti_ids
   FROM attivita a
-  JOIN corso c           ON c.id = a.corso_id
-  LEFT JOIN incarico i   ON i.attivita_id = a.id
+  JOIN corso c                 ON c.id = a.corso_id
+  LEFT JOIN incarico i         ON i.attivita_id = a.id
   LEFT JOIN docenteincarico dic ON dic.incarico_id = i.id
   WHERE a.chiuso = 1
   GROUP BY a.id, a.modalita, a.note, c.id, c.titolo, c.categoria, c.tipologia
   ORDER BY CAST(SUBSTRING_INDEX(a.id,'-',-1) AS UNSIGNED) DESC
 SQL;
 $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+
+function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 ?>
 <!DOCTYPE html>
 <html lang="it">
@@ -37,152 +43,37 @@ $attivita = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <style>
 :root {
-  --bg:#f0f2f5;
-  --fg:#2e3a45;
-  --radius:8px;
-  --shadow:rgba(0,0,0,0.08);
-  --font:'Segoe UI',sans-serif;
-  --pri:#66bb6a;
-  --err:#d9534f;
+  --bg:#f0f2f5; --fg:#2e3a45; --radius:8px; --shadow:rgba(0,0,0,0.08);
+  --font:'Segoe UI',sans-serif; --pri:#66bb6a; --err:#d9534f;
 }
-
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--fg);font-family:var(--font);}
 .container{max-width:900px;margin:2rem auto;padding:0 1rem;}
 h1{text-align:center;margin-bottom:1rem;}
-
-#toast {
-  position: fixed;
-  bottom: 1rem;
-  left: 1rem;
-  background: var(--pri);
-  color: #fff;
-  padding: .75rem 1.25rem;
-  border-radius: var(--radius);
-  box-shadow: 0 2px 6px var(--shadow);
-  opacity: 1;
-  transition: opacity .5s ease-out;
-  z-index: 1000;
-}
-#toast.alert-danger {
-  background-color: var(--err) !important;
-  color: #fff !important;
-}
-
+#toast{position:fixed;bottom:1rem;left:1rem;background:var(--pri);color:#fff;padding:.75rem 1.25rem;border-radius:var(--radius);box-shadow:0 2px 6px var(--shadow);opacity:1;transition:opacity .5s ease-out;z-index:1000;}
+#toast.alert-danger{background-color:var(--err)!important;color:#fff!important;}
 .add-container{text-align:center;margin-bottom:1rem;}
-.add-btn{
-  display:inline-flex;align-items:center;gap:.5rem;
-  background:var(--pri);color:#fff;
-  padding:.5rem 1rem;border-radius:var(--radius);
-  text-decoration:none;transition:background .2s,transform .2s;
-}
-.add-btn:hover{background:#5aad5c;transform:translateY(-2px);}
-
-.filter-area {
-  display:flex; flex-direction:column; gap:.5rem;
-  margin-bottom:1rem;
-}
-.filter-area input,
-.filter-select {
-  width:100%; height:2.5rem;
-  padding:.5rem .75rem;
-  border:1px solid #ccc; border-radius:var(--radius);
-  font-size:1rem;
-}
-.filter-row {
-  display:flex;
-  gap:.5rem;
-}
-.filter-select {
-  flex: 1 1 0;
-  min-width: 0;
-  font-size:.9rem;
-}
-
-.item{
-  background:#fff;border-radius:var(--radius);
-  box-shadow:0 2px 6px var(--shadow);
-  padding:1rem;margin-bottom:.75rem;
-  display:flex;justify-content:space-between;align-items:center;
-  transition:transform .15s,box-shadow .15s;
-}
-.item:hover{
-  transform:translateY(-2px);
-  box-shadow:0 4px 12px var(--shadow);
-}
+.filter-area{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem;}
+.filter-area input,.filter-select{width:100%;height:2.5rem;padding:.5rem .75rem;border:1px solid #ccc;border-radius:var(--radius);font-size:1rem;}
+.filter-row{display:flex;gap:.5rem;}
+.filter-select{flex:1 1 0;min-width:0;font-size:.9rem;}
+.item{background:#fff;border-radius:var(--radius);box-shadow:0 2px 6px var(--shadow);padding:1rem;margin-bottom:.75rem;display:flex;justify-content:space-between;align-items:center;transition:transform .15s,box-shadow .15s;}
+.item:hover{transform:translateY(-2px);box-shadow:0 4px 12px var(--shadow);}
 .info{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;}
 .info .id{font-weight:bold;}
 .info span{color:#666;font-size:.9rem;}
-.actions {
-  display:flex;
-  align-items:center;
-  gap:.5rem;
-}
-.icon-btn{
-  background:none;border:none;color:var(--pri);
-  font-size:1.2rem;cursor:pointer;transition:color .2s;
-  text-decoration:none;
-}
+.actions{display:flex;align-items:center;gap:.5rem;}
+.icon-btn{background:none;border:none;color:var(--pri);font-size:1.2rem;cursor:pointer;transition:color .2s;text-decoration:none;}
 .icon-btn:hover{color:#5aad5c;}
-
-/* Popup Modal */
-.modal-overlay {
-  display:none;
-  position:fixed;
-  top:0; left:0;
-  width:100%; height:100%;
-  background:rgba(0,0,0,0.5);
-  justify-content:center;
-  align-items:center;
-  z-index:2000;
-}
-.modal {
-  background:#fff;
-  border-radius:var(--radius);
-  box-shadow:0 4px 16px rgba(0,0,0,0.2);
-  max-width:600px;
-  width:90%;
-  padding:1.5rem;
-  position:relative;
-}
-.modal h2 {
-  margin-bottom:1rem;
-}
-.modal .close-btn {
-  position:absolute;
-  top:.5rem;
-  right:.5rem;
-  background:none;
-  border:none;
-  font-size:1.5rem;
-  cursor:pointer;
-  color:#666;
-}
-.modal .field {
-  margin-bottom:.75rem;
-}
-.modal .field label {
-  font-weight:bold;
-  display:block;
-  margin-bottom:.25rem;
-}
-.modal .field span {
-  display:block;
-  padding:.5rem;
-  background:#f5f5f5;
-  border-radius:var(--radius);
-  font-size:.9rem;
-}
+.view-link{display:inline-flex;align-items:center;gap:.25rem;}
   </style>
 </head>
 <body>
 <?php
   $role = $_SESSION['role'] ?? 'utente';
-  switch ($role) {
-    case 'admin': include 'navbar_a.php'; break;
-    case 'dev': include 'navbar_d.php'; break;
-    default: include 'navbar.php';
-  }
+  if ($role==='admin')    include 'navbar_a.php';
+  elseif ($role==='dev')  include 'navbar_d.php';
+  else                    include 'navbar.php';
 ?>  
 
 <div class="container">
@@ -218,13 +109,13 @@ h1{text-align:center;margin-bottom:1rem;}
       <select id="filter-corso" class="filter-select">
         <option value="all">Tutti i corsi</option>
         <?php foreach ($corsiList as $c): ?>
-          <option value="<?=htmlspecialchars($c['id'],ENT_QUOTES)?>"><?=htmlspecialchars($c['titolo'],ENT_QUOTES)?></option>
+          <option value="<?=h($c['id'])?>"><?=h($c['titolo'])?></option>
         <?php endforeach; ?>
       </select>
       <select id="filter-docente" class="filter-select">
         <option value="all">Tutti i docenti</option>
         <?php foreach ($docentiList as $d): ?>
-          <option value="<?=htmlspecialchars($d['id'],ENT_QUOTES)?>"><?=htmlspecialchars("{$d['cognome']} {$d['nome']}",ENT_QUOTES)?></option>
+          <option value="<?=h($d['id'])?>"><?=h("{$d['cognome']} {$d['nome']}")?></option>
         <?php endforeach; ?>
       </select>
     </div>
@@ -234,48 +125,37 @@ h1{text-align:center;margin-bottom:1rem;}
     <p style="text-align:center;color:#666;">Nessuna attività chiusa.</p>
   <?php else: foreach ($attivita as $a): ?>
     <div class="item"
-         data-id="<?=htmlspecialchars($a['id'],ENT_QUOTES)?>"
-         data-modalita="<?=htmlspecialchars($a['modalita'],ENT_QUOTES)?>"
-         data-categoria="<?=htmlspecialchars($a['categoria'],ENT_QUOTES)?>"
-         data-tipologia="<?=htmlspecialchars($a['tipologia'],ENT_QUOTES)?>"
-         data-corso="<?=htmlspecialchars($a['corso_titolo'],ENT_QUOTES)?>"
-         data-note="<?=htmlspecialchars($a['note'] ?? '',ENT_QUOTES)?>"
-         data-docenti="<?=htmlspecialchars($a['docenti_ids'] ?? '',ENT_QUOTES)?>">
+         data-id="<?=h($a['id'])?>"
+         data-modalita="<?=h($a['modalita'])?>"
+         data-categoria="<?=h($a['categoria'])?>"
+         data-tipologia="<?=h($a['tipologia'])?>"
+         data-corso="<?=h($a['corso_id'])?>"
+         data-docenti="<?=h($a['docenti_ids'] ?? '')?>">
 
       <div class="info">
-        <span class="id"><?=htmlspecialchars($a['id'],ENT_QUOTES)?></span>
-        <span><?=htmlspecialchars($a['corso_titolo'],ENT_QUOTES)?></span>
-        <span><?=htmlspecialchars($a['modalita'],ENT_QUOTES)?></span>
-        <span><?=htmlspecialchars($a['categoria'],ENT_QUOTES)?></span>
-        <span><?=htmlspecialchars($a['tipologia'],ENT_QUOTES)?></span>
+        <span class="id"><?=h($a['id'])?></span>
+        <span><?=h($a['corso_titolo'])?></span>
+        <span><?=h($a['modalita'])?></span>
+        <span><?=h($a['categoria'])?></span>
+        <span><?=h($a['tipologia'])?></span>
       </div>
 
       <div class="actions">
-        <button class="icon-btn view-btn" title="Visualizza"><i class="bi bi-eye"></i></button>
+        <!-- Visualizza: va alla pagina di dettaglio attivita_chiusa.php -->
+        <a class="icon-btn view-link" href="/biosound/attivita_chiusa.php?id=<?=urlencode($a['id'])?>" title="Visualizza">
+          <i class="bi bi-eye"></i>
+        </a>
+        <!-- Riapri corso -->
         <a href="/biosound/apri_corso.php?id=<?=urlencode($a['id'])?>"
            class="icon-btn"
            title="Riapri corso"
-           onclick="return confirm('Sei sicuro di voler riaprire questa attività?');">
+           onclick="return confirm('Sei sicuro di voler riaprire questa attività? Verranno rimossi gli attestati generati.');">
            <i class="bi bi-unlock"></i>
         </a>
       </div>
 
     </div>
   <?php endforeach; endif; ?>
-</div>
-
-<!-- Modal -->
-<div class="modal-overlay" id="modalOverlay">
-  <div class="modal">
-    <button class="close-btn" onclick="closeModal()">&times;</button>
-    <h2>Dettagli Attività</h2>
-    <div class="field"><label>ID</label><span id="m-id"></span></div>
-    <div class="field"><label>Corso</label><span id="m-corso"></span></div>
-    <div class="field"><label>Modalità</label><span id="m-modalita"></span></div>
-    <div class="field"><label>Categoria</label><span id="m-categoria"></span></div>
-    <div class="field"><label>Tipologia</label><span id="m-tipologia"></span></div>
-    <div class="field"><label>Note</label><span id="m-note"></span></div>
-  </div>
 </div>
 
 <script>
@@ -300,11 +180,11 @@ function applyFilters() {
 
   items.forEach(item => {
     let vis = true;
-    const id    = item.dataset.id.toLowerCase(),
-          mod   = item.dataset.modalita,
-          cat   = item.dataset.categoria,
-          tip   = item.dataset.tipologia,
-          cor   = item.dataset.corso,
+    const id    = (item.dataset.id || '').toLowerCase(),
+          mod   = item.dataset.modalita || '',
+          cat   = item.dataset.categoria || '',
+          tip   = item.dataset.tipologia || '',
+          cor   = item.dataset.corso || '',
           docs  = (item.dataset.docenti||'').split(',');
 
     if (idVal && !id.includes(idVal)) vis = false;
@@ -320,32 +200,6 @@ function applyFilters() {
 [inputId,fMod,fCat,fTipo,fCorso,fDoc].forEach(el => {
   el.addEventListener('input', applyFilters);
   el.addEventListener('change', applyFilters);
-});
-
-// Modal
-const overlay = document.getElementById('modalOverlay');
-const spanId = document.getElementById('m-id');
-const spanCorso = document.getElementById('m-corso');
-const spanMod = document.getElementById('m-modalita');
-const spanCat = document.getElementById('m-categoria');
-const spanTip = document.getElementById('m-tipologia');
-const spanNote = document.getElementById('m-note');
-
-document.querySelectorAll('.view-btn').forEach(btn => {
-  btn.addEventListener('click', e => {
-    const item = e.target.closest('.item');
-    spanId.textContent = item.dataset.id;
-    spanCorso.textContent = item.dataset.corso;
-    spanMod.textContent = item.dataset.modalita;
-    spanCat.textContent = item.dataset.categoria;
-    spanTip.textContent = item.dataset.tipologia;
-    spanNote.textContent = item.dataset.note || '-';
-    overlay.style.display = 'flex';
-  });
-});
-function closeModal(){ overlay.style.display='none'; }
-overlay.addEventListener('click', e => {
-  if(e.target === overlay) closeModal();
 });
 </script>
 </body>
