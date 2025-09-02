@@ -12,62 +12,6 @@ require_once __DIR__ . '/libs/vendor/autoload.php';
 
 use setasign\Fpdi\Fpdi;
 
-define('UPLOAD_DIR_SCHEDA', __DIR__ . '/resources/scheda'); // path assoluto
-
-function save_scheda_pdf(string $attivitaId, string $fieldName = 'scheda_pdf'): array {
-    $out = ['ok' => false, 'msg' => '', 'path' => null, 'url' => null];
-
-    // Nessun file selezionato: non è un errore, si può chiudere lo stesso
-    if (empty($_FILES[$fieldName]) || ($_FILES[$fieldName]['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
-        return ['ok' => true, 'msg' => 'Nessun file caricato', 'path' => null, 'url' => null];
-    }
-
-    $err  = (int)($_FILES[$fieldName]['error'] ?? UPLOAD_ERR_NO_FILE);
-    $size = (int)($_FILES[$fieldName]['size'] ?? 0);
-    $name = (string)($_FILES[$fieldName]['name'] ?? '');
-    $tmp  = (string)($_FILES[$fieldName]['tmp_name'] ?? '');
-
-    if ($err !== UPLOAD_ERR_OK) {
-        error_log("[SCHEDE] Upload error code=$err file=$name");
-        return ['ok' => false, 'msg' => "Upload error ($err) — vedi error_log", 'path' => null, 'url' => null];
-    }
-    if ($size <= 0 || $size > 20*1024*1024) {
-        return ['ok' => false, 'msg' => 'File vuoto o oltre 20MB', 'path' => null, 'url' => null];
-    }
-    $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-    if ($ext !== 'pdf') {
-        return ['ok' => false, 'msg' => 'Solo PDF consentiti', 'path' => null, 'url' => null];
-    }
-    if (!is_uploaded_file($tmp)) {
-        error_log("[SCHEDE] is_uploaded_file=false tmp=$tmp");
-        return ['ok' => false, 'msg' => 'Sorgente non valida (tmp non è un upload)', 'path' => null, 'url' => null];
-    }
-
-    $destDir = rtrim(UPLOAD_DIR_SCHEDA, '/').'/'.$attivitaId;
-    if (!is_dir($destDir) && !@mkdir($destDir, 0775, true)) {
-        error_log("[SCHEDE] mkdir fallita: $destDir");
-        return ['ok' => false, 'msg' => 'Impossibile creare la cartella scheda', 'path' => null, 'url' => null];
-    }
-
-    // nome sicuro
-    $safeBase = preg_replace('/[^a-zA-Z0-9._-]/','_', pathinfo($name, PATHINFO_FILENAME));
-    $stored   = $safeBase.'-'.bin2hex(random_bytes(4)).'.pdf';
-    $dest     = $destDir.'/'.$stored;
-
-    if (!@move_uploaded_file($tmp, $dest)) {
-        error_log("[SCHEDE] move_uploaded_file fallito: $tmp -> $dest");
-        return ['ok' => false, 'msg' => 'move_uploaded_file fallito (controlla permessi e limiti)', 'path' => null, 'url' => null];
-    }
-    @chmod($dest, 0664);
-
-    return [
-        'ok'   => true,
-        'msg'  => '',
-        'path' => $dest,
-        'url'  => '/biosound/resources/scheda/'.$attivitaId.'/'.$stored, // per visualizzazione
-    ];
-}
-
 /* =======================
    Helpers
 ======================= */
@@ -170,14 +114,6 @@ if (!is_file($templatePdf)) {
 $isPost = ($_SERVER['REQUEST_METHOD'] === 'POST');
 if (!$isPost) {
   $_SESSION['csrf'] = bin2hex(random_bytes(16));
-
-  // Salva la scheda (se presente). Non blocca la chiusura se fallisce, ma logga.
-$schedaRes = save_scheda_pdf($id, 'scheda_pdf');
-if (!$schedaRes['ok']) {
-    // puoi mostrare un avviso all'utente, ma non fermare tutto
-    $_SESSION['__scheda_warn__'] = $schedaRes['msg'];
-}
-
   ?>
   <!DOCTYPE html>
   <html lang="it">
