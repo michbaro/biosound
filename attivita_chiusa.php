@@ -1,5 +1,5 @@
 <?php
-// attivita_chiusa.php — vista read-only di un'attività chiusa, con riapertura e link attestati
+// attivita_chiusa.php — vista read-only di un'attività chiusa, con riapertura e link attestati + docenti per data
 require_once __DIR__ . '/init.php';
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -36,16 +36,26 @@ if (!$act) {
 }
 
 /* =========================
-   Lezioni (minuti = end-start)
+   Lezioni (minuti = end-start) + docenti per ciascuna lezione
+   (docenti presi da docenteincarico per l'incarico della lezione)
 ========================= */
 $lezStmt = $pdo->prepare(<<<'SQL'
-  SELECT dl.id, dl.data,
-         TIME_FORMAT(dl.oraInizio, '%H:%i') AS start,
-         TIME_FORMAT(dl.oraFine,   '%H:%i') AS end,
-         GREATEST(TIMESTAMPDIFF(MINUTE, dl.oraInizio, dl.oraFine), 0) AS minuti
+  SELECT
+    dl.id,
+    dl.data,
+    TIME_FORMAT(dl.oraInizio, '%H:%i') AS start,
+    TIME_FORMAT(dl.oraFine,   '%H:%i') AS end,
+    GREATEST(TIMESTAMPDIFF(MINUTE, dl.oraInizio, dl.oraFine), 0) AS minuti,
+    COALESCE(
+      GROUP_CONCAT(DISTINCT CONCAT(d.cognome,' ',d.nome) ORDER BY d.cognome, d.nome SEPARATOR ', '),
+      ''
+    ) AS docenti
   FROM incarico i
-  JOIN datalezione dl ON dl.incarico_id = i.id
+  JOIN datalezione dl       ON dl.incarico_id = i.id
+  LEFT JOIN docenteincarico dic ON dic.incarico_id = i.id
+  LEFT JOIN docente d            ON d.id = dic.docente_id
   WHERE i.attivita_id = ?
+  GROUP BY dl.id, dl.data, dl.oraInizio, dl.oraFine
   ORDER BY dl.data, dl.oraInizio
 SQL);
 $lezStmt->execute([$id]);
@@ -91,7 +101,7 @@ while ($r = $presStmt->fetch(PDO::FETCH_ASSOC)) {
 ========================= */
 function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function fmtDate($d){ if(!$d) return ''; $ts=strtotime($d); return $ts?date('d/m/Y',$ts):''; }
-function labelModalita($m){ return $m; } // valore già descrittivo in attivita.modalita
+function labelModalita($m){ return $m; } // già descrittiva in attivita.modalita
 
 // estrae percorso PDF dall'attestato: /resources/attestati/<attestato_id>/<stored>
 function attestato_url(?string $attestatoId, ?string $json) : ?string {
@@ -99,9 +109,7 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
   $arr = json_decode($json, true);
   if (!is_array($arr) || empty($arr[0]['stored'])) return null;
   $stored = $arr[0]['stored'];
-  // Attenzione al path: esponiamo come URL relativo
-  $path = "/biosound/resources/attestati/{$attestatoId}/{$stored}";
-  return $path;
+  return "/biosound/resources/attestati/{$attestatoId}/{$stored}";
 }
 
 ?>
@@ -129,12 +137,13 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
     .muted{color:var(--muted)}
     .readonly{background:#f9fafb;border:1px dashed #e5e7eb;border-radius:8px;padding:10px}
     table{border-collapse:collapse;width:100%;border-radius:10px;overflow:hidden}
-    th,td{border:1px solid #e8e8e8;padding:.6rem;text-align:center}
+    th,td{border:1px solid #e8e8e8;padding:.6rem;text-align:center;vertical-align:top}
     th.left,td.left{text-align:left}
     .badge{display:inline-flex;align-items:center;gap:.35rem;border-radius:8px;padding:.2rem .5rem;font-weight:600}
     .badge-ok{background:#e9f7ef;color:#0a6b2b}
     .badge-no{background:#fdecea;color:#b11c1c}
     .small{font-size:.9rem}
+    .smaller{font-size:.85rem}
     .actions{display:flex;gap:.6rem;justify-content:flex-end;margin-top:.5rem}
     .btn{display:inline-flex;align-items:center;gap:.5rem;border:0;padding:.55rem .9rem;border-radius:10px;color:#fff;cursor:pointer;text-decoration:none;font-weight:600}
     .btn-grey{background:var(--btn2)}
@@ -204,7 +213,7 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
     <?php endif; ?>
   </div>
 
-  <!-- lezioni -->
+  <!-- lezioni + docenti -->
   <div class="card">
     <h3 style="margin-top:0">Lezioni</h3>
     <?php if ($lezioni): ?>
@@ -214,6 +223,7 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
             <th class="left">Data</th>
             <th>Orario</th>
             <th>Durata</th>
+            <th class="left">Docenti</th>
           </tr>
         </thead>
         <tbody>
@@ -222,6 +232,7 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
               <td class="left"><?= fmtDate($dl['data']) ?></td>
               <td><?= h($dl['start'].' - '.$dl['end']) ?></td>
               <td><?= (int)$dl['minuti'] ?>′</td>
+              <td class="left"><?= $dl['docenti'] ? h($dl['docenti']) : '<span class="muted smaller">—</span>' ?></td>
             </tr>
           <?php endforeach; ?>
         </tbody>
@@ -243,6 +254,9 @@ function attestato_url(?string $attestatoId, ?string $json) : ?string {
             <th>
               <?= fmtDate($dl['data']) ?><br>
               <span class="small muted"><?= h($dl['start'].'-'.$dl['end']) ?><br>(<?= (int)$dl['minuti'] ?>′)</span>
+              <?php if (!empty($dl['docenti'])): ?>
+                <br><span class="small" style="display:inline-block;margin-top:.25rem"><?= h($dl['docenti']) ?></span>
+              <?php endif; ?>
             </th>
           <?php endforeach; ?>
           <th>Totale (h)</th>
