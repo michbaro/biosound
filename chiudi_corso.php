@@ -32,11 +32,8 @@ function expiry_from_today_years(int $years): string {
   $targetYear = (int)$today->format('Y') + max(0, $years);
   $m = (int)$today->format('n'); // 1..12
   $d = (int)$today->format('j'); // 1..31
-
-  // ultimo giorno del mese destinazione
   $eom = (new DateTime())->setDate($targetYear, $m, 1)->modify('last day of this month');
   $eomDay = (int)$eom->format('j');
-
   $day = min($d, $eomDay);
   $expiry = (new DateTime())->setDate($targetYear, $m, $day)->setTime(0,0,0);
   return $expiry->format('Y-m-d');
@@ -140,16 +137,19 @@ if (!$isPost) {
       th.left,td.left{text-align:left}
       .row-total{font-weight:700}
       .state-min{color:var(--ok)} .state-over{color:var(--warn)} .state-low{color:var(--err)}
-      .actions{display:flex;gap:.75rem;justify-content:flex-end;margin-top:1rem}
+      .actions{display:flex;gap:.75rem;justify-content:flex-end;margin-top:1rem;flex-wrap:wrap}
       .btn{display:inline-flex;align-items:center;gap:.4rem;border:0;padding:.6rem 1rem;border-radius:8px;color:#fff;cursor:pointer;font-weight:600}
       .btn-sec{background:#6c757d} .btn-pri{background:var(--pri)}
-      .legend{display:flex;gap:1rem;align-items:center;margin:.5rem 0}
+      .legend{display:flex;gap:1rem;align-items:center;margin:.5rem 0;flex-wrap:wrap}
       .legend span{display:inline-flex;align-items:center;gap:.4rem}
       .chip{width:.8rem;height:.8rem;border-radius:2px;display:inline-block}
       .c-low{background:var(--err)} .c-over{background:var(--warn)} .c-min{background:var(--ok)}
       .note{color:#555;font-size:.9rem}
       .alert{padding:.6rem .8rem;border-radius:8px;background:#fff3cd;color:#664d03;border:1px solid #ffecb5;margin:.5rem 0}
       small.muted{display:block;color:#6c757d}
+      /* nuovo: mini bottoni nelle intestazioni */
+      .mini-btn{margin-top:.35rem;border:0;border-radius:6px;padding:.25rem .5rem;font-size:.75rem;cursor:pointer;color:#fff;background:#2e7d32}
+      .mini-btn:hover{opacity:.9}
     </style>
   </head>
   <body>
@@ -172,6 +172,10 @@ if (!$isPost) {
             <span><span class="chip c-min"></span> raggiunge minimo</span>
             <span><span class="chip c-over"></span> supera minimo (avviso)</span>
             <span><span class="chip c-low"></span> sotto minimo</span>
+            <!-- nuovo: bottone globale "Tutti superati" -->
+            <button type="button" id="btn-all-pass" class="btn btn-pri" style="margin-left:auto">
+              <i class="bi bi-check2-all"></i> Tutti superati
+            </button>
           </div>
 
           <div style="overflow:auto">
@@ -183,6 +187,12 @@ if (!$isPost) {
                   <th class="sticky">
                     <?= fmt_it_date($dl['data']) ?><br>
                     <small class="muted"><?= htmlspecialchars($dl['start'].'-'.$dl['end'],ENT_QUOTES) ?><br>(<?= (int)$dl['minuti'] ?>′)</small>
+                    <!-- nuovo: bottone per segnare tutti presenti in questa giornata -->
+                    <div>
+                      <button type="button" class="mini-btn btn-all-present" data-dl="<?= htmlspecialchars($dl['id'],ENT_QUOTES) ?>">
+                        Tutti presenti
+                      </button>
+                    </div>
                   </th>
                 <?php endforeach; ?>
                 <th class="sticky">Totale (h)</th>
@@ -203,13 +213,14 @@ if (!$isPost) {
                                name="pres[<?= $dl['id'] ?>][<?= $p['id'] ?>]"
                                value="1"
                                class="pres-cb"
-                               data-min="<?= (int)$dl['minuti'] ?>">
+                               data-min="<?= (int)$dl['minuti'] ?>"
+                               data-dl="<?= htmlspecialchars($dl['id'],ENT_QUOTES) ?>"><!-- nuovo: data-dl -->
                       </label>
                     </td>
                   <?php endforeach; ?>
                   <td class="row-total" data-dip="<?= $p['id'] ?>">0.0</td>
                   <td>
-                    <input type="checkbox" name="pass[<?= $p['id'] ?>]" value="1">
+                    <input type="checkbox" name="pass[<?= $p['id'] ?>]" value="1" class="pass-cb">
                   </td>
                 </tr>
               <?php endforeach; ?>
@@ -250,6 +261,26 @@ if (!$isPost) {
           cb.addEventListener('change', ()=> updateRowTotal(tr));
         });
         updateRowTotal(tr);
+      });
+
+      // ===== nuovo: "Tutti presenti" per colonna (giornata) =====
+      document.querySelectorAll('.btn-all-present').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const dlId = btn.getAttribute('data-dl');
+          document.querySelectorAll('.pres-cb[data-dl="'+dlId+'"]').forEach(cb => {
+            if (!cb.checked) {
+              cb.checked = true;
+              cb.dispatchEvent(new Event('change', { bubbles: true })); // aggiorna i totali
+            }
+          });
+          // come sicurezza, ricalcola tutti i totali
+          rows.forEach(updateRowTotal);
+        });
+      });
+
+      // ===== nuovo: "Tutti superati" =====
+      document.getElementById('btn-all-pass')?.addEventListener('click', () => {
+        document.querySelectorAll('.pass-cb').forEach(cb => cb.checked = true);
       });
     </script>
   </body>
@@ -368,7 +399,7 @@ SQL);
     $es = $esiti[$dipId] ?? null;
     if (!$es) continue;
 
-    // Regola aggiornata: GENERA solo se superato=1 (indipendente dalle ore)
+    // Genera solo se superato=1
     if ((int)$es['superato'] !== 1) continue;
 
     // evita doppioni per attività/dipendente
@@ -376,15 +407,15 @@ SQL);
     $exists->execute([$id, $dipId]);
     if ($exists->fetchColumn()) continue;
 
-    // calcolo scadenza dal corso.validita
-$validitaAnni = (int)($att['validita_anni'] ?? 0);
-$scadenzaYmd  = $validitaAnni > 0 ? expiry_from_today_years($validitaAnni) : null;
-$scadenzaIT   = $scadenzaYmd ? fmt_it_date($scadenzaYmd) : '—';
+    // calcolo scadenza dal corso.validita (giorno/mese oggi, anno = oggi+validita)
+    $validitaAnni = (int)($att['validita_anni'] ?? 0);
+    $scadenzaYmd  = $validitaAnni > 0 ? expiry_from_today_years($validitaAnni) : null;
+    $scadenzaIT   = $scadenzaYmd ? fmt_it_date($scadenzaYmd) : '—';
 
     $values = [
       'titolo_corso'   => $att['corso_titolo'] ?? '',
       'normativa'      => $att['normativa'] ?? '',
-      'nominativo'     => trim(($p['cognome'] ?? '').' '.($p['nome'] ?? '')),
+      'nominativo'     => trim(($p['cognome'] ?? '').' '.(($p['nome'] ?? ''))),
       'codice_fiscale' => $p['codice_fiscale'] ?? '',
       'luogonascita'   => $p['luogonascita'] ?? '',
       'datanascita'    => fmt_it_date($p['datanascita'] ?? null),
@@ -439,7 +470,6 @@ $scadenzaIT   = $scadenzaYmd ? fmt_it_date($scadenzaYmd) : '—';
     if (!is_dir($dir)) mkdir($dir,0775,true);
     $pdfPath = $dir.'/'.$filename;
     file_put_contents($pdfPath,$pdfBytes);
-    $written[] = $pdfPath;
 
     $filesMeta = [[
       'original' => "Attestato - {$att['corso_titolo']} - {$p['cognome']} {$p['nome']}.pdf",
