@@ -9,6 +9,7 @@
       "setasign/fpdi": "1.6.*",
         "fpdf/fpdf": "^1.86",
     "setasign/fpdf": "^1.8", 
-    "setasign/fpdi": "^2.6"
+    "setasign/fpdi": "^2.6",
+        "phpoffice/phpspreadsheet": "^5.0"
     }
   }
