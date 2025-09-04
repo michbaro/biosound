@@ -488,7 +488,7 @@ table.preview{border-collapse:collapse;width:100%;font-size:.95rem;border-radius
           <div class="dz-inner">
             <i class="bi bi-cloud-arrow-up"></i>
             <div class="dz-title">Trascina qui il file XLSX o clicca</div>
-            <div class="dz-hint">Riga 1: Nome | Cognome | Codice Fiscale | Azienda | Sede (opzionali: Comune Residenza | Via Residenza | Mansione)</div>
+            <div class="dz-hint">Scarica il template in alto a destra</div>
           </div>
         </div>
         <div id="imp-error" class="alert-err" style="display:none;margin-top:8px"></div>
@@ -663,7 +663,6 @@ function renderPreview(rows){
         <div class="actions">
           <button id="imp-confirm" class="btn btn-green"><i class="bi bi-check2-circle"></i> Conferma inserimento</button>
           <button id="imp-new" class="btn btn-grey"><i class="bi bi-arrow-repeat"></i> Scegli nuovo file</button>
-          <a class="btn btn-grey" href="/biosound/resources/templates/dipendenti_massivo.xlsx" download><i class="bi bi-download"></i> Template</a>
         </div>
       </div>
       <div class="preview-wrap">
