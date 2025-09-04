@@ -177,7 +177,7 @@ body {
   background: var(--page-bg);
   color: var(--page-fg);
   font: 16px system-ui, -apple-system, Segoe UI, Roboto;
-}
+} //
 
 * {
   box-sizing: border-box;
