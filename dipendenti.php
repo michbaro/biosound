@@ -114,36 +114,8 @@ if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['ajax']??'')==='cf_loc'){
   exit;
 }
 
-/* -------- Query elenco + dati filtri -------- */
-$azienda_id=$_GET['azienda_id']??null; $sede_id=$_GET['sede_id']??null;
-
-if($sede_id){
-  $stmt=$pdo->prepare("SELECT s.nome sede_nome, a.ragionesociale azienda_nome FROM sede s JOIN azienda a ON a.id=s.azienda_id WHERE s.id=?");
-  $stmt->execute([$sede_id]); $row=$stmt->fetch(PDO::FETCH_ASSOC);
-  if(!$row){ header('Location:/biosound/aziende.php'); exit; }
-  $contextName="{$row['azienda_nome']} ({$row['sede_nome']})";
-}elseif($azienda_id){
-  $stmt=$pdo->prepare("SELECT ragionesociale FROM azienda WHERE id=?");
-  $stmt->execute([$azienda_id]); $nome=$stmt->fetchColumn();
-  if(!$nome){ header('Location:/biosound/aziende.php'); exit; }
-  $contextName=$nome;
-}else $contextName='Tutti i dipendenti';
-
-$params=[]; $sql="SELECT d.id,d.nome,d.cognome,d.codice_fiscale,a.id azienda_id,a.ragionesociale azienda,s.id sede_id,s.nome sede
-                  FROM dipendente d
-                  LEFT JOIN dipendente_sede ds ON ds.dipendente_id=d.id
-                  LEFT JOIN sede s ON s.id=ds.sede_id
-                  LEFT JOIN azienda a ON a.id=s.azienda_id";
-if($sede_id){$sql.=" WHERE s.id=?";$params[]=$sede_id;}
-elseif($azienda_id){$sql.=" WHERE a.id=?";$params[]=$azienda_id;}
-$stmt=$pdo->prepare($sql." ORDER BY d.cognome,d.nome");
-$stmt->execute($params);
-$dipendenti=$stmt->fetchAll(PDO::FETCH_ASSOC);
-
-$aziendeList=$pdo->query("SELECT id,ragionesociale FROM azienda ORDER BY ragionesociale")->fetchAll(PDO::FETCH_ASSOC);
-$sediAll=$pdo->query("SELECT id,nome,azienda_id,is_legale FROM sede ORDER BY nome")->fetchAll(PDO::FETCH_ASSOC);
-
 /* -------- AJAX: IMPORT (parse + confirm) -------- */
+// viene richiamato dal popup integrato (drag&drop)
 if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['ajax']??'')==='import_parse'){
   header('Content-Type: application/json');
   try{
@@ -154,6 +126,10 @@ if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['ajax']??'')==='import_parse')
     if ($_FILES['xlsx']['error']!==UPLOAD_ERR_OK) throw new RuntimeException('Caricamento non riuscito (codice '.$_FILES['xlsx']['error'].').');
     $ext=strtolower(pathinfo($_FILES['xlsx']['name'], PATHINFO_EXTENSION));
     if($ext!=='xlsx') throw new RuntimeException('Il file deve essere in formato .xlsx');
+
+    // Lookup in memory (case-insensitive)
+    $aziendeList = $pdo->query("SELECT id,ragionesociale FROM azienda")->fetchAll(PDO::FETCH_ASSOC);
+    $sediAll     = $pdo->query("SELECT id,nome,azienda_id FROM sede")->fetchAll(PDO::FETCH_ASSOC);
 
     $aziLower=[]; foreach($aziendeList as $a){ $aziLower[mb_strtolower($a['ragionesociale'],'UTF-8')]=$a['id']; }
     $sedLower=[]; foreach($sediAll as $s){ $sedLower[$s['azienda_id']][mb_strtolower($s['nome'],'UTF-8')]=$s['id']; }
@@ -245,6 +221,76 @@ if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['ajax']??'')==='import_confirm
   exit;
 }
 
+/* -------- AJAX: bulk -------- */
+if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['ajax']??'')==='bulk'){
+  header('Content-Type: application/json');
+  if(!csrf_ok()){echo json_encode(['ok'=>false,'msg'=>'CSRF']); exit;}
+  $action=$_POST['action']??''; $ids=array_filter(array_map('trim', explode(',', $_POST['ids']??'')));
+  if(!$ids){echo json_encode(['ok'=>false,'msg'=>'Nessun dipendente selezionato.']); exit;}
+  try{
+    $pdo->beginTransaction();
+    if($action==='delete'){
+      $in=implode(',',array_fill(0,count($ids),'?'));
+      $pdo->prepare("DELETE FROM dipendente_sede WHERE dipendente_id IN ($in)")->execute($ids);
+      $pdo->prepare("DELETE FROM dipendente       WHERE id IN ($in)")->execute($ids);
+      $pdo->commit(); echo json_encode(['ok'=>true]); exit;
+    }
+    if($action==='change_company'){
+      $azienda_id=$_POST['azienda_id']??''; if(!$azienda_id) throw new RuntimeException('Seleziona un’azienda.');
+      $st=$pdo->prepare("SELECT id FROM sede WHERE azienda_id=? AND is_legale=1 LIMIT 1");
+      $st->execute([$azienda_id]); $sede_legale=$st->fetchColumn();
+      if(!$sede_legale) throw new RuntimeException('L’azienda scelta non ha una sede legale.');
+      foreach($ids as $d){ 
+        $pdo->prepare('DELETE FROM dipendente_sede WHERE dipendente_id=?')->execute([$d]);
+        $pdo->prepare('INSERT INTO dipendente_sede(dipendente_id,sede_id) VALUES(?,?)')->execute([$d,$sede_legale]); 
+      }
+      $pdo->commit(); echo json_encode(['ok'=>true]); exit;
+    }
+    if($action==='change_seat'){
+      $azienda_id=$_POST['azienda_id']??''; $sede_id=$_POST['sede_id']??'';
+      if(!$azienda_id||!$sede_id) throw new RuntimeException('Seleziona azienda e sede.');
+      foreach($ids as $d){ 
+        $pdo->prepare('DELETE FROM dipendente_sede WHERE dipendente_id=?')->execute([$d]);
+        $pdo->prepare('INSERT INTO dipendente_sede(dipendente_id,sede_id) VALUES(?,?)')->execute([$d,$sede_id]); 
+      }
+      $pdo->commit(); echo json_encode(['ok'=>true]); exit;
+    }
+    throw new RuntimeException('Azione non valida.');
+  }catch(Throwable $e){ if($pdo->inTransaction())$pdo->rollBack();
+    $msg=$e instanceof RuntimeException?$e->getMessage():'Errore tecnico: contatta l’amministrazione';
+    echo json_encode(['ok'=>false,'msg'=>$msg]); }
+  exit;
+}
+
+/* -------- Query elenco + dati filtri -------- */
+$azienda_id=$_GET['azienda_id']??null; $sede_id=$_GET['sede_id']??null;
+
+if($sede_id){
+  $stmt=$pdo->prepare("SELECT s.nome sede_nome, a.ragionesociale azienda_nome FROM sede s JOIN azienda a ON a.id=s.azienda_id WHERE s.id=?");
+  $stmt->execute([$sede_id]); $row=$stmt->fetch(PDO::FETCH_ASSOC);
+  if(!$row){ header('Location:/biosound/aziende.php'); exit; }
+  $contextName="{$row['azienda_nome']} ({$row['sede_nome']})";
+}elseif($azienda_id){
+  $stmt=$pdo->prepare("SELECT ragionesociale FROM azienda WHERE id=?");
+  $stmt->execute([$azienda_id]); $nome=$stmt->fetchColumn();
+  if(!$nome){ header('Location:/biosound/aziende.php'); exit; }
+  $contextName=$nome;
+}else $contextName='Tutti i dipendenti';
+
+$params=[]; $sql="SELECT d.id,d.nome,d.cognome,d.codice_fiscale,a.id azienda_id,a.ragionesociale azienda,s.id sede_id,s.nome sede
+                  FROM dipendente d
+                  LEFT JOIN dipendente_sede ds ON ds.dipendente_id=d.id
+                  LEFT JOIN sede s ON s.id=ds.sede_id
+                  LEFT JOIN azienda a ON a.id=s.azienda_id";
+if($sede_id){$sql.=" WHERE s.id=?";$params[]=$sede_id;}
+elseif($azienda_id){$sql.=" WHERE a.id=?";$params[]=$azienda_id;}
+$stmt=$pdo->prepare($sql." ORDER BY d.cognome,d.nome");
+$stmt->execute($params);
+$dipendenti=$stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$aziendeList=$pdo->query("SELECT id,ragionesociale FROM azienda ORDER BY ragionesociale")->fetchAll(PDO::FETCH_ASSOC);
+$sediAll=$pdo->query("SELECT id,nome,azienda_id,is_legale FROM sede ORDER BY nome")->fetchAll(PDO::FETCH_ASSOC);
+
 /* navbar */
 $role=$_SESSION['role']??'utente';
 if($role==='admin') include 'navbar_a.php';
@@ -279,7 +325,7 @@ body {
 h1{text-align:center;margin:.2rem 0}
 .context{color:#6b7280;text-align:center;margin-bottom:10px}
 
-.toolbar{ display:flex; align-items:center; justify-content:center; gap:.6rem; margin-bottom:.8rem; }
+.toolbar{ display:flex; align-items:center; justify-content:center; gap:.6rem; margin-bottom:.8rem; flex-wrap:wrap; }
 .toolbar .right{display:flex;gap:.6rem}
 
 /* LARGHEZZE FISSE per i filtri */
@@ -350,8 +396,6 @@ table.preview{border-collapse:collapse;width:100%;font-size:.95rem;border-radius
   background:#66bb6a; color:#fff; padding:.6rem .85rem; border-radius:10px;
   box-shadow:0 10px 30px rgba(0,0,0,.2); display:none; align-items:center; gap:.5rem;
 }
-.toast.show{display:flex; animation:fadeout 0.3s ease-out forwards; }
-@keyframes fadeout { from{opacity:1} to{opacity:1} } /* (gestito via JS hide) */
 </style>
 </head>
 <body>
@@ -397,7 +441,7 @@ table.preview{border-collapse:collapse;width:100%;font-size:.95rem;border-radius
 </div>
 
 <!-- Toast -->
-<div id="toast" class="toast"><i class="bi bi-check-circle"></i><span>Importazione completata con successo</span></div>
+<div id="toast" class="toast"><i class="bi bi-check-circle"></i><span>Operazione completata</span></div>
 
 <!-- Modal add/edit -->
 <div class="overlay" id="modal">
@@ -508,7 +552,11 @@ function applyFilters(){
 
 document.getElementById('sel-vis').addEventListener('change', e=>{
   const on=e.target.checked;
-  rows.forEach(r=>{ if(r.style.display!=='none') r.querySelector('.rowchk').checked=on; });
+  const visibleRows=rows.filter(r=>r.style.display!=='none');
+  if(on && visibleRows.length>0){
+    if(!confirm('Stai selezionando tutti i dipendenti visibili ('+visibleRows.length+'). Procedere?')){ e.target.checked=false; return; }
+  }
+  visibleRows.forEach(r=> r.querySelector('.rowchk').checked=on);
 });
 
 /* ---------- Add/Edit modal ---------- */
@@ -698,7 +746,7 @@ function wireDropzone(){
 }
 document.getElementById('btn-import').addEventListener('click', resetImportUI);
 
-/* ---------- Bulk actions ---------- */
+/* ---------- Bulk actions: dropdown + popup ---------- */
 const dd=document.getElementById('bulk-dd');
 dd.querySelector('.dd-btn').addEventListener('click', ()=> dd.classList.toggle('open'));
 document.addEventListener('click', e=>{ if(!dd.contains(e.target)) dd.classList.remove('open'); });
@@ -724,9 +772,11 @@ dd.querySelectorAll('.dd-item').forEach(it=>{
       bulkTitle.textContent='Cambia azienda (sede legale automatica)';
       bAction.value='change_company';
       const az=document.createElement('select'); az.name='azienda_id'; az.required=true; az.innerHTML='<option value="">Seleziona azienda</option>'+azOpts;
-      bulkFields.appendChild(Object.assign(document.createElement('div'),{className:'form-row',innerHTML:'<label>Azienda *</label>'})).appendChild(az);
+      const wrap1=document.createElement('div'); wrap1.className='form-row'; wrap1.innerHTML='<label>Azienda *</label>'; wrap1.appendChild(az);
       const info=document.createElement('div'); info.className='form-row'; info.style.gridColumn='1/-1'; info.innerHTML='<div style="color:#6b7280">Verrà impostata automaticamente la sede <b>LEGALE</b> della nuova azienda.</div>';
-      bulkFields.appendChild(info);
+      bulkFields.append(wrap1, info);
+      openModal(bulkModal);
+      return;
     }
 
     if(it.dataset.act==='seat'){
@@ -737,31 +787,33 @@ dd.querySelectorAll('.dd-item').forEach(it=>{
       const az=document.createElement('select'); az.name='azienda_id'; az.required=true; az.innerHTML='<option value="">Seleziona azienda</option>'+azOpts;
       if(!multi) az.value=selRows[0].dataset.az;
       const se=document.createElement('select'); se.name='sede_id'; se.required=true;
-      function fill(){ fillSedi(se, az.value); if(!multi) se.value=selRows[0].dataset.se; }
-      az.addEventListener('change', fill); fill();
-      const d1=Object.assign(document.createElement('div'),{className:'form-row',innerHTML:'<label>Azienda *</label>'});
-      const d2=Object.assign(document.createElement('div'),{className:'form-row',innerHTML:'<label>Sede *</label>'});
-      d1.appendChild(az); d2.appendChild(se); bulkFields.append(d1,d2);
+      function doFill(){ fillSedi(se, az.value); if(!multi) se.value=selRows[0].dataset.se; }
+      az.addEventListener('change', doFill); doFill();
+      const d1=document.createElement('div'); d1.className='form-row'; d1.innerHTML='<label>Azienda *</label>'; d1.appendChild(az);
+      const d2=document.createElement('div'); d2.className='form-row'; d2.innerHTML='<label>Sede *</label>'; d2.appendChild(se);
+      bulkFields.append(d1,d2);
       if(multi){ const info=document.createElement('div'); info.className='form-row'; info.style.gridColumn='1/-1'; info.innerHTML='<div style="color:#6b7280">Hai selezionato dipendenti di aziende diverse: scegli azienda e sede di destinazione.</div>'; bulkFields.appendChild(info); }
+      openModal(bulkModal);
+      return;
     }
 
     if(it.dataset.act==='delete'){
       bulkTitle.textContent='Elimina selezionati';
       bAction.value='delete';
-      const d=Object.assign(document.createElement('div'),{className:'form-row',style:'grid-column:1/-1'});
-      d.innerHTML='<div>Verranno eliminati <b>'+ids.length+'</b> dipendente/i. Confermare?</div>';
+      const d=document.createElement('div'); d.className='form-row'; d.style.gridColumn='1/-1'; d.innerHTML='<div>Verranno eliminati <b>'+ids.length+'</b> dipendente/i. Confermare?</div>';
       bulkFields.appendChild(d);
+      openModal(bulkModal);
+      return;
     }
-
-    openModal(bulkModal);
   });
 });
+
 document.getElementById('bulk-form').addEventListener('submit', async e=>{
   e.preventDefault();
   const fd=new FormData(e.target);
   const j=await (await fetch(location.href,{method:'POST',body:fd})).json();
   if(!j.ok){ alert(j.msg||'Errore tecnico: contatta l’amministrazione'); return; }
-  location.reload();
+  window.location.href='?bulk=ok';
 });
 
 /* ---------- Toast auto per bulk=ok ---------- */
@@ -769,9 +821,7 @@ document.getElementById('bulk-form').addEventListener('submit', async e=>{
   const params=new URLSearchParams(location.search);
   if(params.get('bulk')==='ok'){
     const t=document.getElementById('toast');
-    t.classList.add('show');
     t.style.display='flex';
-    setTimeout(()=>{ t.style.opacity='1'; }, 10);
     setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; }, 2400);
     setTimeout(()=>{ t.style.display='none'; }, 3000);
   }
