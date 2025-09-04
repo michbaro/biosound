@@ -13,14 +13,32 @@ function isValidCF(string $cf): bool {
   $sum=0; for($i=0;$i<15;$i++){ $c=$cf[$i]; $sum+=$i%2===0?$odd[$c]:$even[$c]; }
   return $cf[15]===chr(65+($sum%26));
 }
+function cf_parse_birth_local(PDO $pdo, string $cf): array {
+  $cf=strtoupper($cf);
+  $yy=(int)substr($cf,6,2);
+  $mmMap=['A'=>1,'B'=>2,'C'=>3,'D'=>4,'E'=>5,'H'=>6,'L'=>7,'M'=>8,'P'=>9,'R'=>10,'S'=>11,'T'=>12];
+  $mm=$mmMap[$cf[8]]??null;
+  $gg=(int)substr($cf,9,2); if($gg>40)$gg-=40;
+  $curYY=(int)date('y'); $yyyy=($yy<=$curYY)?2000+$yy:1900+$yy;
+  $birth=($mm && $gg>=1 && $gg<=31)?sprintf('%04d-%02d-%02d',$yyyy,$mm,$gg):null;
+  $belf=substr($cf,11,4);
+  $loc='';
+  try{
+    $st=$pdo->prepare("SELECT denominazione_ita,sigla_provincia FROM gi_comuni_nazioni_cf WHERE codice_belfiore=? LIMIT 1");
+    $st->execute([$belf]);
+    if($row=$st->fetch(PDO::FETCH_ASSOC)) $loc=trim($row['denominazione_ita'].' ('.$row['sigla_provincia'].')');
+  }catch(Throwable $e){}
+  return [$birth,$loc];
+}
 
-/* -------- AJAX: single -------- */
+/* -------- AJAX: single (get/save/delete) -------- */
 if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['ajax']??'')==='get_dip'){
   header('Content-Type: application/json');
   $id=$_POST['id']??'';
   $st=$pdo->prepare("
-    SELECT d.id,d.nome,d.cognome,d.codice_fiscale,d.datanascita,d.luogonascita,
-           d.comuneresidenza,d.viaresidenza,d.mansione,
+    SELECT d.id,d.nome,d.cognome,d.codice_fiscale,
+           DATE_FORMAT(d.datanascita,'%Y-%m-%d') AS datanascita,
+           d.luogonascita,d.comuneresidenza,d.viaresidenza,d.mansione,
            s.id sede_id, a.id azienda_id
     FROM dipendente d
     LEFT JOIN dipendente_sede ds ON ds.dipendente_id=d.id
@@ -82,40 +100,17 @@ if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['ajax']??'')==='delete_dip'){
   exit;
 }
 
-/* -------- AJAX: bulk -------- */
-if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['ajax']??'')==='bulk'){
+/* -------- AJAX: luogo nascita da Belfiore (per CF auto) -------- */
+if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['ajax']??'')==='cf_loc'){
   header('Content-Type: application/json');
-  if(!csrf_ok()){echo json_encode(['ok'=>false,'msg'=>'CSRF']); exit;}
-  $action=$_POST['action']??''; $ids=array_filter(array_map('trim', explode(',', $_POST['ids']??'')));
-  if(!$ids){echo json_encode(['ok'=>false,'msg'=>'Nessun dipendente selezionato.']); exit;}
+  $code=strtoupper(substr($_POST['code']??'',0,4));
   try{
-    $pdo->beginTransaction();
-    if($action==='delete'){
-      $in=implode(',',array_fill(0,count($ids),'?'));
-      $pdo->prepare("DELETE FROM dipendente_sede WHERE dipendente_id IN ($in)")->execute($ids);
-      $pdo->prepare("DELETE FROM dipendente WHERE id IN ($in)")->execute($ids);
-      $pdo->commit(); echo json_encode(['ok'=>true]); exit;
-    }
-    if($action==='change_company'){
-      $azienda_id=$_POST['azienda_id']??''; if(!$azienda_id) throw new RuntimeException('Seleziona un’azienda.');
-      $st=$pdo->prepare("SELECT id FROM sede WHERE azienda_id=? AND is_legale=1 LIMIT 1");
-      $st->execute([$azienda_id]); $sede_legale=$st->fetchColumn();
-      if(!$sede_legale) throw new RuntimeException('L’azienda scelta non ha una sede legale.');
-      foreach($ids as $d){ $pdo->prepare('DELETE FROM dipendente_sede WHERE dipendente_id=?')->execute([$d]);
-        $pdo->prepare('INSERT INTO dipendente_sede(dipendente_id,sede_id) VALUES(?,?)')->execute([$d,$sede_legale]); }
-      $pdo->commit(); echo json_encode(['ok'=>true]); exit;
-    }
-    if($action==='change_seat'){
-      $azienda_id=$_POST['azienda_id']??''; $sede_id=$_POST['sede_id']??'';
-      if(!$azienda_id||!$sede_id) throw new RuntimeException('Seleziona azienda e sede.');
-      foreach($ids as $d){ $pdo->prepare('DELETE FROM dipendente_sede WHERE dipendente_id=?')->execute([$d]);
-        $pdo->prepare('INSERT INTO dipendente_sede(dipendente_id,sede_id) VALUES(?,?)')->execute([$d,$sede_id]); }
-      $pdo->commit(); echo json_encode(['ok'=>true]); exit;
-    }
-    throw new RuntimeException('Azione non valida.');
-  }catch(Throwable $e){ if($pdo->inTransaction())$pdo->rollBack();
-    $msg=$e instanceof RuntimeException?$e->getMessage():'Errore tecnico: contatta l’amministrazione';
-    echo json_encode(['ok'=>false,'msg'=>$msg]); }
+    $st=$pdo->prepare("SELECT denominazione_ita,sigla_provincia FROM gi_comuni_nazioni_cf WHERE codice_belfiore=? LIMIT 1");
+    $st->execute([$code]);
+    if($r=$st->fetch(PDO::FETCH_ASSOC)){
+      echo json_encode(['ok'=>true,'loc'=>trim($r['denominazione_ita'].' ('.$r['sigla_provincia'].')')]);
+    } else echo json_encode(['ok'=>false]);
+  }catch(Throwable $e){ echo json_encode(['ok'=>false]); }
   exit;
 }
 
@@ -148,6 +143,108 @@ $dipendenti=$stmt->fetchAll(PDO::FETCH_ASSOC);
 $aziendeList=$pdo->query("SELECT id,ragionesociale FROM azienda ORDER BY ragionesociale")->fetchAll(PDO::FETCH_ASSOC);
 $sediAll=$pdo->query("SELECT id,nome,azienda_id,is_legale FROM sede ORDER BY nome")->fetchAll(PDO::FETCH_ASSOC);
 
+/* -------- AJAX: IMPORT (parse + confirm) -------- */
+if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['ajax']??'')==='import_parse'){
+  header('Content-Type: application/json');
+  try{
+    require_once __DIR__ . '/libs/vendor/autoload.php';
+    if (!class_exists(\PhpOffice\PhpSpreadsheet\IOFactory::class)) throw new RuntimeException('TECH');
+
+    if (!isset($_FILES['xlsx']) || $_FILES['xlsx']['error']===UPLOAD_ERR_NO_FILE) throw new RuntimeException('Seleziona un file XLSX.');
+    if ($_FILES['xlsx']['error']!==UPLOAD_ERR_OK) throw new RuntimeException('Caricamento non riuscito (codice '.$_FILES['xlsx']['error'].').');
+    $ext=strtolower(pathinfo($_FILES['xlsx']['name'], PATHINFO_EXTENSION));
+    if($ext!=='xlsx') throw new RuntimeException('Il file deve essere in formato .xlsx');
+
+    $aziLower=[]; foreach($aziendeList as $a){ $aziLower[mb_strtolower($a['ragionesociale'],'UTF-8')]=$a['id']; }
+    $sedLower=[]; foreach($sediAll as $s){ $sedLower[$s['azienda_id']][mb_strtolower($s['nome'],'UTF-8')]=$s['id']; }
+
+    $reader=\PhpOffice\PhpSpreadsheet\IOFactory::createReader('Xlsx');
+    $reader->setReadDataOnly(true);
+    $sheet=$reader->load($_FILES['xlsx']['tmp_name'])->getActiveSheet();
+
+    $exp=['Nome','Cognome','Codice Fiscale','Azienda','Sede'];
+    $hA=trim((string)$sheet->getCell('A1')->getValue());
+    $hB=trim((string)$sheet->getCell('B1')->getValue());
+    $hC=trim((string)$sheet->getCell('C1')->getValue());
+    $hD=trim((string)$sheet->getCell('D1')->getValue());
+    $hE=trim((string)$sheet->getCell('E1')->getValue());
+    if($hA!==$exp[0]||$hB!==$exp[1]||$hC!==$exp[2]||$hD!==$exp[3]||$hE!==$exp[4])
+      throw new RuntimeException('Intestazioni non valide. Attese: "Nome, Cognome, Codice Fiscale, Azienda, Sede" nella riga 1.');
+
+    $hasF = strcasecmp(trim((string)$sheet->getCell('F1')->getValue()), 'Comune Residenza')===0;
+    $hasG = strcasecmp(trim((string)$sheet->getCell('G1')->getValue()), 'Via Residenza')===0;
+    $hasH = strcasecmp(trim((string)$sheet->getCell('H1')->getValue()), 'Mansione')===0;
+
+    $max=$sheet->getHighestDataRow();
+    if($max<2) throw new RuntimeException('Nessun dato da importare (solo intestazione).');
+
+    $preview=[]; $errors=[];
+    for($r=2;$r<=$max;$r++){
+      $nome=titlecase((string)$sheet->getCell('A'.$r)->getValue());
+      $cogn=titlecase((string)$sheet->getCell('B'.$r)->getValue());
+      $cf=strtoupper(trim((string)$sheet->getCell('C'.$r)->getValue()));
+      $azNom=trim((string)$sheet->getCell('D'.$r)->getValue());
+      $sdNom=trim((string)$sheet->getCell('E'.$r)->getValue());
+      $comRes=$hasF?trim((string)$sheet->getCell('F'.$r)->getValue()):'';
+      $viaRes=$hasG?trim((string)$sheet->getCell('G'.$r)->getValue()):'';
+      $mans=$hasH?trim((string)$sheet->getCell('H'.$r)->getValue()):'';
+
+      if($nome===''&&$cogn===''&&$cf===''&&$azNom===''&&$sdNom===''&&$comRes===''&&$viaRes===''&&$mans==='') continue;
+
+      if($nome===''||$cogn===''||$cf===''||$azNom===''||$sdNom===''){ $errors[]="Riga $r: campi obbligatori mancanti."; continue; }
+      if(!isValidCF($cf)){ $errors[]="Riga $r: Codice Fiscale non valido ($cf)."; continue; }
+
+      $aid = $aziLower[mb_strtolower($azNom,'UTF-8')] ?? null;
+      if(!$aid){ $errors[]="Riga $r: Azienda '$azNom' non trovata."; continue; }
+      $sid = $sedLower[$aid][mb_strtolower($sdNom,'UTF-8')] ?? null;
+      if(!$sid){ $errors[]="Riga $r: Sede '$sdNom' non trovata per azienda '$azNom'."; continue; }
+
+      $chk=$pdo->prepare("SELECT COUNT(*) FROM dipendente d JOIN dipendente_sede ds ON d.id=ds.dipendente_id JOIN sede s ON s.id=ds.sede_id WHERE d.codice_fiscale=? AND s.azienda_id=?");
+      $chk->execute([$cf,$aid]);
+      if((int)$chk->fetchColumn()>0){ $errors[]="Riga $r: Codice Fiscale già presente per l’azienda ($cf)."; continue; }
+
+      [$dob,$loc]=cf_parse_birth_local($pdo,$cf);
+      $preview[]=[
+        'riga'=>$r,'nome'=>$nome,'cognome'=>$cogn,'codice_fiscale'=>$cf,
+        'azienda'=>$azNom,'sede'=>$sdNom,'azienda_id'=>$aid,'sede_id'=>$sid,
+        'datanascita'=>$dob,'luogonascita'=>$loc,'comuneresidenza'=>$comRes,'viaresidenza'=>$viaRes,'mansione'=>$mans
+      ];
+    }
+    if($errors) throw new RuntimeException(implode("\n",$errors));
+    if(!$preview) throw new RuntimeException('Nessuna riga valida da importare.');
+
+    echo json_encode(['ok'=>true,'preview'=>$preview]);
+  }catch(Throwable $e){
+    $tech = ($e->getMessage()==='TECH'||$e instanceof Error);
+    echo json_encode(['ok'=>false,'msg'=>$tech?'Errore tecnico: contatta l’amministrazione':$e->getMessage()]);
+  }
+  exit;
+}
+if($_SERVER['REQUEST_METHOD']==='POST' && ($_POST['ajax']??'')==='import_confirm'){
+  header('Content-Type: application/json');
+  try{
+    $items=json_decode($_POST['items']??'[]', true);
+    if(!$items||!is_array($items)) throw new RuntimeException('Dati non validi.');
+    $pdo->beginTransaction();
+    $insD=$pdo->prepare("INSERT INTO dipendente(id,nome,cognome,codice_fiscale,datanascita,luogonascita,comuneresidenza,viaresidenza,mansione) VALUES (?,?,?,?,?,?,?,?,?)");
+    $insL=$pdo->prepare("INSERT INTO dipendente_sede(dipendente_id,sede_id) VALUES(?,?)");
+    foreach($items as $r){
+      $chk=$pdo->prepare("SELECT COUNT(*) FROM dipendente d JOIN dipendente_sede ds ON d.id=ds.dipendente_id JOIN sede s ON s.id=ds.sede_id WHERE d.codice_fiscale=? AND s.azienda_id=?");
+      $chk->execute([$r['codice_fiscale'],$r['azienda_id']]);
+      if((int)$chk->fetchColumn()>0) throw new RuntimeException('Duplicato CF per azienda: '.$r['codice_fiscale']);
+      $id=bin2hex(random_bytes(16));
+      $insD->execute([$id, $r['nome'], $r['cognome'], $r['codice_fiscale'], $r['datanascita']?:null, $r['luogonascita'], $r['comuneresidenza']??'', $r['viaresidenza']??'', $r['mansione']??'']);
+      $insL->execute([$id, $r['sede_id']]);
+    }
+    $pdo->commit();
+    echo json_encode(['ok'=>true]);
+  }catch(Throwable $e){
+    if($pdo->inTransaction()) $pdo->rollBack();
+    echo json_encode(['ok'=>false,'msg'=>($e instanceof Error)?'Errore tecnico: contatta l’amministrazione':$e->getMessage()]);
+  }
+  exit;
+}
+
 /* navbar */
 $role=$_SESSION['role']??'utente';
 if($role==='admin') include 'navbar_a.php';
@@ -161,8 +258,7 @@ else include 'navbar.php';
 <title>Dipendenti</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 <style>
-
-  
+/* Variabili di pagina (non tocco la navbar) */
 body {
   --page-bg: #f0f2f5;
   --page-fg: #2e3a45;
@@ -172,96 +268,45 @@ body {
   --page-dark: #5b6670;
   --page-radius: 8px;
   --page-shadow: 0 10px 30px rgba(0,0,0,.08);
-
   margin: 0;
   background: var(--page-bg);
   color: var(--page-fg);
   font: 16px system-ui, -apple-system, Segoe UI, Roboto;
-} //
-
-* {
-  box-sizing: border-box;
 }
-
+* { box-sizing: border-box; }
 
 .container{max-width:1100px;margin:28px auto;padding:0 14px}
 h1{text-align:center;margin:.2rem 0}
 .context{color:#6b7280;text-align:center;margin-bottom:10px}
 
-/* toolbar in una riga, centrata */
-.toolbar{
-  display:flex;
-  align-items:center;
-  justify-content:center;  /* tutto al centro */
-  gap:.6rem;
-  margin-bottom:.8rem;
-}
+.toolbar{ display:flex; align-items:center; justify-content:center; gap:.6rem; margin-bottom:.8rem; }
 .toolbar .right{display:flex;gap:.6rem}
 
-input,select{
-  height:36px;
-  padding:.4rem .6rem;
-  border:1px solid #d7dde3;
-  background:#fff;
-  border-radius:9px;
-}
+/* LARGHEZZE FISSE per i filtri */
+#search{ width:280px; }
+#f-az{ width:210px; }
+#f-se{ width:210px; }
+
+input,select{ height:36px; padding:.4rem .6rem; border:1px solid #d7dde3; background:#fff; border-radius:9px; }
 
 /* buttons */
-.btn{
-  display:inline-flex;
-  align-items:center;
-  gap:.45rem;
-  padding:.5rem .95rem;
-  border:0;
-  border-radius:999px;
-  color:#fff;
-  font-weight:600;
-  cursor:pointer;
-  white-space:nowrap;
-}
-.btn-green{background:#66bb6a}
-.btn-green:hover{background:#5aad5c}
-.btn-grey{background:#6c757d}
-.btn-grey:hover{opacity:.92}
+.btn{ display:inline-flex; align-items:center; gap:.45rem; padding:.5rem .95rem; border:0; border-radius:999px; color:#fff; font-weight:600; cursor:pointer; white-space:nowrap; }
+.btn-green{background:#66bb6a} .btn-green:hover{background:#5aad5c}
+.btn-grey{background:#6c757d} .btn-grey:hover{opacity:.92}
+.btn-red{background:#dc3545} .btn-red:hover{filter:brightness(.95)}
 .chkline{display:inline-flex;align-items:center;gap:.4rem}
 
 /* dropdown */
 .dropdown{position:relative}
 .dd-btn{background:#6c757d}
-.dd-menu{
-  position:absolute;
-  right:0;
-  top:calc(100% + 6px);
-  background:#fff;
-  border:1px solid #e6e8eb;
-  border-radius:10px;
-  box-shadow:0 10px 30px rgba(0,0,0,.12);
-  min-width:220px;
-  display:none;
-  z-index:50;
-}
+.dd-menu{position:absolute;right:0;top:calc(100% + 6px);background:#fff;border:1px solid #e6e8eb;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.12);min-width:220px;display:none;z-index:50}
 .dropdown.open .dd-menu{display:block}
-.dd-item{
-  padding:.55rem .8rem;
-  display:flex;
-  gap:.5rem;
-  align-items:center;
-  cursor:pointer;
-}
+.dd-item{padding:.55rem .8rem;display:flex;gap:.5rem;align-items:center;cursor:pointer}
 .dd-item:hover{background:#f3f6f8}
 
-/* list compact, long rows */
+/* list */
 .list{display:flex;flex-direction:column;gap:.55rem}
-.item{
-  background:#fff;
-  border-radius:14px;
-  box-shadow:0 2px 10px rgba(0,0,0,.06);
-  padding:.55rem .9rem;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  min-height:44px;
-}
+.item{background:#fff;border-radius:14px;box-shadow:0 2px 10px rgba(0,0,0,.06);padding:.55rem .9rem;display:flex;align-items:center;justify-content:space-between;min-height:44px}
 .item .left{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}
 .name{font-weight:700}
 .badge{background:#eef2f7;border-radius:999px;padding:.1rem .5rem;color:#667}
@@ -269,50 +314,44 @@ input,select{
 .icon-btn:hover{opacity:.8}
 .empty{color:#7a8691;text-align:center;padding:1.2rem}
 
-/* modal (add/edit + bulk + import) */
-.overlay{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.4);
-  display:none;
-  align-items:center;
-  justify-content:center;
-  z-index:2000;
-}
+/* modals */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:2000}
 .overlay.open{display:flex}
-.modal{
-  background:#fff;
-  border-radius:16px;
-  box-shadow:0 20px 60px rgba(0,0,0,.25);
-  width:min(820px,96vw);
-  padding:16px;
-}
-.modal .head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  margin-bottom:.4rem;
-}
-.modal .close{
-  background:none;
-  border:0;
-  font-size:1.4rem;
-  color:#888;
-  cursor:pointer;
-}
+.modal{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.25);width:min(820px,96vw);padding:16px}
+.modal .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem}
+.modal .close{background:none;border:0;font-size:1.4rem;color:#888;cursor:pointer}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
 .form-row{display:flex;flex-direction:column;gap:.25rem}
 .actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:.6rem}
-.modal-iframe{width:min(1000px,96vw)}
-.modal-iframe .content{height:min(80vh,760px)}
-.modal-iframe iframe{
-  width:100%;
-  height:100%;
-  border:0;
-  border-radius:12px;
-  background:#fff;
-}
 
+.modal-iframe .content{height:min(80vh,760px)}
+/* Import modal specific */
+.imp-card{background:#fff;border:1px solid #e6e8eb;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.08);padding:12px}
+.dz{position:relative;border:2px dashed #cfd8dc;background:#fff;border-radius:12px;padding:24px;text-align:center;transition:all .15s;min-height:160px;cursor:pointer}
+.dz:hover{border-color:#66bb6a}
+.dz.dragover{border-color:#66bb6a;background:#eef8f0}
+.dz input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.dz .dz-inner{pointer-events:none}
+.dz .dz-inner i{font-size:2rem;color:#66bb6a;margin-bottom:.25rem;display:block}
+.dz .dz-title{font-weight:700}
+.dz .dz-hint{color:#90a4ae;font-size:.9rem;margin-top:.25rem}
+
+.preview-wrap{max-height:70vh;overflow:auto;margin-top:8px}
+table.preview{border-collapse:collapse;width:100%;font-size:.95rem;border-radius:10px;overflow:hidden}
+.preview th,.preview td{border:1px solid #e8e8e8;padding:.6rem .7rem;text-align:left;vertical-align:top}
+.preview thead th{background:#f7faf8;position:sticky;top:0}
+
+.alert-ok{background:#e6f4ea;border:1px solid #b7e1c0;color:#1e7a35;padding:.6rem .8rem;border-radius:10px;margin:8px 0}
+.alert-err{background:#fdecea;border:1px solid #f5c2c7;color:#b11c1c;padding:.6rem .8rem;border-radius:10px;white-space:pre-line;margin:8px 0}
+
+/* Toast bottom-left */
+.toast{
+  position:fixed; left:16px; bottom:16px; z-index:3000;
+  background:#66bb6a; color:#fff; padding:.6rem .85rem; border-radius:10px;
+  box-shadow:0 10px 30px rgba(0,0,0,.2); display:none; align-items:center; gap:.5rem;
+}
+.toast.show{display:flex; animation:fadeout 0.3s ease-out forwards; }
+@keyframes fadeout { from{opacity:1} to{opacity:1} } /* (gestito via JS hide) */
 </style>
 </head>
 <body>
@@ -357,6 +396,9 @@ input,select{
   </div>
 </div>
 
+<!-- Toast -->
+<div id="toast" class="toast"><i class="bi bi-check-circle"></i><span>Importazione completata con successo</span></div>
+
 <!-- Modal add/edit -->
 <div class="overlay" id="modal">
   <div class="modal">
@@ -377,19 +419,37 @@ input,select{
         <div class="form-row"><label>Mansione</label><input id="f-mans" name="mansione"></div>
       </div>
       <div class="actions">
-        <button type="button" class="btn btn-grey" id="btn-del" style="display:none"><i class="bi bi-trash"></i> Elimina</button>
         <button type="button" class="btn btn-grey" data-close>Annulla</button>
+        <button type="button" class="btn btn-red" id="btn-del" style="display:none"><i class="bi bi-trash"></i> Elimina</button>
         <button class="btn btn-green" type="submit"><i class="bi bi-save"></i> Salva</button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- Modal Import -->
-<div class="overlay" id="popup-import">
-  <div class="modal modal-iframe">
-    <div class="head"><h3>Importa dipendenti (XLSX)</h3><button class="close" data-close>&times;</button></div>
-    <div class="content"><iframe src="/biosound/importa_dipendenti.php"></iframe></div>
+<!-- Modal Import integrato -->
+<div class="overlay" id="import-modal">
+  <div class="modal" style="width:min(1000px,96vw)">
+    <div class="head">
+      <h3>Importa dipendenti (XLSX)</h3>
+      <div>
+        <a class="btn btn-grey" href="/biosound/resources/templates/dipendenti_massivo.xlsx" download style="margin-right:.5rem"><i class="bi bi-download"></i> Template</a>
+        <button class="close" data-close>&times;</button>
+      </div>
+    </div>
+    <div id="imp-body">
+      <div class="imp-card">
+        <div id="dropzone" class="dz" title="Clicca o trascina qui il file XLSX">
+          <input type="file" id="xlsx" accept=".xlsx">
+          <div class="dz-inner">
+            <i class="bi bi-cloud-arrow-up"></i>
+            <div class="dz-title">Trascina qui il file XLSX o clicca</div>
+            <div class="dz-hint">Riga 1: Nome | Cognome | Codice Fiscale | Azienda | Sede (opzionali: Comune Residenza | Via Residenza | Mansione)</div>
+          </div>
+        </div>
+        <div id="imp-error" class="alert-err" style="display:none;margin-top:8px"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -453,10 +513,9 @@ document.getElementById('sel-vis').addEventListener('change', e=>{
 
 /* ---------- Add/Edit modal ---------- */
 const modal=document.getElementById('modal');
-const toTitle=s=> (s||'').toLowerCase().replace(/\b\p{L}/gu,m=>m.toUpperCase());
 function openModal(el){ el.classList.add('open'); }
 function closeModal(el){ el.classList.remove('open'); }
-[modal, document.getElementById('popup-import'), document.getElementById('bulk-modal')].forEach(ov=>{
+[modal, document.getElementById('import-modal'), document.getElementById('bulk-modal')].forEach(ov=>{
   ov.addEventListener('click', e=>{ if(e.target===ov || e.target.dataset.close!==undefined) closeModal(ov); });
 });
 
@@ -475,8 +534,8 @@ document.querySelectorAll('.edit').forEach(b=>{
     const fd=new FormData(); fd.append('ajax','get_dip'); fd.append('id',id);
     const j=await (await fetch(location.href,{method:'POST',body:fd})).json();
     document.getElementById('mod-title').textContent='Modifica dipendente';
-    ['id','nome','cognome','codice_fiscale','datanascita','luogonascita','comuneresidenza','viaresidenza','mansione']
-      .forEach(k=>{ const m={'id':'f-id','nome':'f-nome','cognome':'f-cognome','codice_fiscale':'f-cf','datanascita':'f-dob','luogonascita':'f-ln','comuneresidenza':'f-com','viaresidenza':'f-via','mansione':'f-mans'}; document.getElementById(m[k]).value=j[k]||''; });
+    const map={'id':'f-id','nome':'f-nome','cognome':'f-cognome','codice_fiscale':'f-cf','datanascita':'f-dob','luogonascita':'f-ln','comuneresidenza':'f-com','viaresidenza':'f-via','mansione':'f-mans'};
+    Object.keys(map).forEach(k=>{ document.getElementById(map[k]).value=j[k]||''; });
     document.getElementById('f-az-sel').value=j.azienda_id||'';
     fillSediSelect(document.getElementById('f-se-sel'), j.azienda_id||'', false);
     document.getElementById('f-se-sel').value=j.sede_id||'';
@@ -495,9 +554,40 @@ function validCF(cf){
   let s=0; for(let i=0;i<15;i++){ const c=cf[i]; s += (i%2===0?odd[c]:even[c]); }
   return cf[15]===String.fromCharCode(65+(s%26));
 }
+
+/* CF ⇒ data e luogo (client-side + ajax) */
+const cfIn=document.getElementById('f-cf');
+const dobIn=document.getElementById('f-dob');
+const lnIn=document.getElementById('f-ln');
+const MONTH={'A':'01','B':'02','C':'03','D':'04','E':'05','H':'06','L':'07','M':'08','P':'09','R':'10','S':'11','T':'12'};
+cfIn.addEventListener('input', async () => {
+  const cf=(cfIn.value||'').toUpperCase().trim();
+  if(cf.length!==16) return;
+  if(!validCF(cf)) return;
+  // Data nascita
+  const yy=parseInt(cf.substring(6,8),10);
+  const mon=MONTH[cf[8]]; if(!mon) return;
+  const raw=parseInt(cf.substring(9,11),10); const dd=String(raw>40?raw-40:raw).padStart(2,'0');
+  const cur=new Date().getFullYear()%100;
+  const yyyy=(yy<=cur?2000+yy:1900+yy);
+  const dateStr=`${yyyy}-${mon}-${dd}`;
+  if(!dobIn.value) dobIn.value=dateStr;
+  // Luogo nascita via ajax (Belfiore)
+  const code=cf.substring(11,15);
+  if(!lnIn.value){
+    const fd=new FormData(); fd.append('ajax','cf_loc'); fd.append('code', code);
+    try{
+      const j=await (await fetch(location.href,{method:'POST',body:fd})).json();
+      if(j.ok && j.loc){ lnIn.value=j.loc; }
+    }catch(e){/* ignore */}
+  }
+});
+
 document.getElementById('dip-form').addEventListener('submit', async e=>{
   e.preventDefault();
-  const f=e.target; f.nome.value=toTitle(f.nome.value); f.cognome.value=toTitle(f.cognome.value);
+  const f=e.target;
+  f.nome.value=(f.nome.value||'').toLowerCase().replace(/\b\p{L}/gu,m=>m.toUpperCase());
+  f.cognome.value=(f.cognome.value||'').toLowerCase().replace(/\b\p{L}/gu,m=>m.toUpperCase());
   if(!validCF(f.codice_fiscale.value)){ alert('Codice fiscale non valido'); return; }
   const fd=new FormData(f); fd.append('ajax','save_dip');
   const j=await (await fetch(location.href,{method:'POST',body:fd})).json();
@@ -512,11 +602,103 @@ document.getElementById('btn-del').addEventListener('click', async ()=>{
   location.reload();
 });
 
-/* ---------- Import popup ---------- */
-const imp=document.getElementById('popup-import');
-document.getElementById('btn-import').addEventListener('click', ()=> openModal(imp));
+/* ---------- Import popup (integrato) ---------- */
+const importModal=document.getElementById('import-modal');
+document.getElementById('btn-import').addEventListener('click', ()=> openModal(importModal));
 
-/* ---------- Bulk actions: dropdown + popup ---------- */
+function renderPreview(rows){
+  const body=document.getElementById('imp-body');
+  body.innerHTML=`
+    <div class="imp-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <h3 style="margin:0">Anteprima importazione (${rows.length} record)</h3>
+        <div class="actions">
+          <button id="imp-confirm" class="btn btn-green"><i class="bi bi-check2-circle"></i> Conferma inserimento</button>
+          <button id="imp-new" class="btn btn-grey"><i class="bi bi-arrow-repeat"></i> Scegli nuovo file</button>
+          <a class="btn btn-grey" href="/biosound/resources/templates/dipendenti_massivo.xlsx" download><i class="bi bi-download"></i> Template</a>
+        </div>
+      </div>
+      <div class="preview-wrap">
+        <table class="preview">
+          <thead>
+            <tr>
+              <th>#Riga</th><th>Nome</th><th>Cognome</th><th>Codice Fiscale</th><th>Azienda</th><th>Sede</th>
+              <th>Data nascita</th><th>Luogo nascita</th><th>Comune residenza</th><th>Via residenza</th><th>Mansione</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r=>`
+              <tr>
+                <td>${r.riga}</td>
+                <td>${r.nome}</td>
+                <td>${r.cognome}</td>
+                <td>${r.codice_fiscale}</td>
+                <td>${r.azienda}</td>
+                <td>${r.sede}</td>
+                <td>${r.datanascita||''}</td>
+                <td>${r.luogonascita||''}</td>
+                <td>${r.comuneresidenza||''}</td>
+                <td>${r.viaresidenza||''}</td>
+                <td>${r.mansione||''}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  document.getElementById('imp-new').addEventListener('click', ()=>resetImportUI());
+  document.getElementById('imp-confirm').addEventListener('click', async ()=>{
+    const fd=new FormData();
+    fd.append('ajax','import_confirm');
+    fd.append('items', JSON.stringify(rows));
+    const j=await (await fetch(location.href,{method:'POST',body:fd})).json();
+    if(!j.ok){ alert(j.msg||'Errore tecnico: contatta l’amministrazione'); return; }
+    window.location.href='/biosound/dipendenti.php?bulk=ok';
+  });
+}
+function resetImportUI(){
+  const body=document.getElementById('imp-body');
+  body.innerHTML=`
+    <div class="imp-card">
+      <div id="dropzone" class="dz" title="Clicca o trascina qui il file XLSX">
+        <input type="file" id="xlsx" accept=".xlsx">
+        <div class="dz-inner">
+          <i class="bi bi-cloud-arrow-up"></i>
+          <div class="dz-title">Trascina qui il file XLSX o clicca</div>
+          <div class="dz-hint">Riga 1: Nome | Cognome | Codice Fiscale | Azienda | Sede (opzionali: Comune Residenza | Via Residenza | Mansione)</div>
+        </div>
+      </div>
+      <div id="imp-error" class="alert-err" style="display:none;margin-top:8px"></div>
+    </div>`;
+  wireDropzone();
+}
+function wireDropzone(){
+  const dz=document.getElementById('dropzone'); if(!dz) return;
+  const input=document.getElementById('xlsx');
+  const err=document.getElementById('imp-error');
+  function showErr(msg){ err.textContent=msg; err.style.display='block'; }
+  function clearErr(){ err.style.display='none'; err.textContent=''; }
+  async function submitFile(){
+    if(!input.files||input.files.length!==1) return;
+    const f=input.files[0];
+    if(!f.name.toLowerCase().endsWith('.xlsx')){ showErr('Il file deve essere un .xlsx'); input.value=''; return; }
+    clearErr();
+    const fd=new FormData(); fd.append('ajax','import_parse'); fd.append('xlsx', f);
+    const j=await (await fetch(location.href,{method:'POST',body:fd})).json();
+    if(!j.ok){ showErr(j.msg||'Errore tecnico: contatta l’amministrazione'); return; }
+    renderPreview(j.preview||[]);
+  }
+  input.addEventListener('change', submitFile);
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.add('dragover'); }));
+  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev, e=>{ e.preventDefault(); dz.classList.remove('dragover'); }));
+  dz.addEventListener('drop', e=>{
+    const fl=e.dataTransfer?.files; if(fl&&fl.length){ const dt=new DataTransfer(); dt.items.add(fl[0]); input.files=dt.files; submitFile(); }
+  });
+}
+document.getElementById('btn-import').addEventListener('click', resetImportUI);
+
+/* ---------- Bulk actions ---------- */
 const dd=document.getElementById('bulk-dd');
 dd.querySelector('.dd-btn').addEventListener('click', ()=> dd.classList.toggle('open'));
 document.addEventListener('click', e=>{ if(!dd.contains(e.target)) dd.classList.remove('open'); });
@@ -529,6 +711,8 @@ const bAction=document.getElementById('b-action');
 const bIds=document.getElementById('b-ids');
 function fillSedi(sel, az){ sel.innerHTML='<option value="">Seleziona sede</option>'; sediAll.forEach(s=>{ if(String(s.azienda_id)===String(az)){ const o=document.createElement('option'); o.value=s.id; o.textContent=s.nome; sel.appendChild(o);} }); }
 
+const azOpts = `<?php $o=[]; foreach($aziendeList as $a){ $o[]='<option value="'.htmlspecialchars($a['id'],ENT_QUOTES).'">'.htmlspecialchars($a['ragionesociale'],ENT_QUOTES).'</option>'; } echo implode('', $o); ?>`;
+
 dd.querySelectorAll('.dd-item').forEach(it=>{
   it.addEventListener('click', ()=>{
     dd.classList.remove('open');
@@ -539,13 +723,9 @@ dd.querySelectorAll('.dd-item').forEach(it=>{
     if(it.dataset.act==='company'){
       bulkTitle.textContent='Cambia azienda (sede legale automatica)';
       bAction.value='change_company';
-      const az=document.createElement('select'); az.name='azienda_id'; az.required=true;
-      az.innerHTML='<option value="">Seleziona azienda</option>' + <?php
-        $o=[]; foreach($aziendeList as $a){ $o[]='<option value="'.htmlspecialchars($a['id'],ENT_QUOTES).'">'.htmlspecialchars($a['ragionesociale'],ENT_QUOTES).'</option>'; }
-        echo json_encode(implode('', $o));
-      ?>;
+      const az=document.createElement('select'); az.name='azienda_id'; az.required=true; az.innerHTML='<option value="">Seleziona azienda</option>'+azOpts;
       bulkFields.appendChild(Object.assign(document.createElement('div'),{className:'form-row',innerHTML:'<label>Azienda *</label>'})).appendChild(az);
-      const info=document.createElement('div'); info.className='form-row'; info.innerHTML='<div style="color:#6b7280">Verrà impostata automaticamente la sede <b>LEGALE</b> della nuova azienda.</div>';
+      const info=document.createElement('div'); info.className='form-row'; info.style.gridColumn='1/-1'; info.innerHTML='<div style="color:#6b7280">Verrà impostata automaticamente la sede <b>LEGALE</b> della nuova azienda.</div>';
       bulkFields.appendChild(info);
     }
 
@@ -554,14 +734,11 @@ dd.querySelectorAll('.dd-item').forEach(it=>{
       bAction.value='change_seat';
       const selRows=[...document.querySelectorAll('.item')].filter(r=>ids.includes(r.dataset.id));
       const setAz=new Set(selRows.map(r=>r.dataset.az)); const multi=setAz.size>1;
-      const az=document.createElement('select'); az.name='azienda_id'; az.required=true;
-      az.innerHTML='<option value="">Seleziona azienda</option>' + <?php echo json_encode(implode('', $o)); ?>;
+      const az=document.createElement('select'); az.name='azienda_id'; az.required=true; az.innerHTML='<option value="">Seleziona azienda</option>'+azOpts;
       if(!multi) az.value=selRows[0].dataset.az;
-
       const se=document.createElement('select'); se.name='sede_id'; se.required=true;
       function fill(){ fillSedi(se, az.value); if(!multi) se.value=selRows[0].dataset.se; }
       az.addEventListener('change', fill); fill();
-
       const d1=Object.assign(document.createElement('div'),{className:'form-row',innerHTML:'<label>Azienda *</label>'});
       const d2=Object.assign(document.createElement('div'),{className:'form-row',innerHTML:'<label>Sede *</label>'});
       d1.appendChild(az); d2.appendChild(se); bulkFields.append(d1,d2);
@@ -587,8 +764,18 @@ document.getElementById('bulk-form').addEventListener('submit', async e=>{
   location.reload();
 });
 
-/* import open */
-document.getElementById('btn-import').addEventListener('click', ()=> openModal(document.getElementById('popup-import')));
+/* ---------- Toast auto per bulk=ok ---------- */
+(function(){
+  const params=new URLSearchParams(location.search);
+  if(params.get('bulk')==='ok'){
+    const t=document.getElementById('toast');
+    t.classList.add('show');
+    t.style.display='flex';
+    setTimeout(()=>{ t.style.opacity='1'; }, 10);
+    setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; }, 2400);
+    setTimeout(()=>{ t.style.display='none'; }, 3000);
+  }
+})();
 </script>
 </body>
 </html>
