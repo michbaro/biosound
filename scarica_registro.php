@@ -10,8 +10,9 @@ error_reporting(E_ALL);
 
 // 1) Init
 require __DIR__ . '/init.php';             // fornisce $pdo
-require __DIR__ . '/vendor/autoload.php';  // Composer autoload
-require_once __DIR__ . '/vendor/tinybutstrong/opentbs/tbs_plugin_opentbs.php';
+require_once __DIR__ . '/libs/vendor/autoload.php';
+require_once __DIR__ . '/libs/vendor/tinybutstrong/opentbs/tbs_plugin_opentbs.php';
+
 
 use clsTinyButStrong;
 use tbs_plugin_opentbs;
