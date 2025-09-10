@@ -1,6 +1,11 @@
   <?php
 // corsi.php — elenco + add/edit/delete in un unico file
 // "Programma" è un TEXT (textbox) + bottone "Scarica programma" che crea PDF da template_programma.html
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+
 include 'init.php';
 if (session_status()===PHP_SESSION_NONE) session_start();
 
