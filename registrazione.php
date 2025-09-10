@@ -1,6 +1,6 @@
 <?php
-// log/registrazione.php — accessibile solo al ruolo “dev”
-require_once __DIR__ . '/../init.php';
+// ./registrazione.php — accessibile solo al ruolo “dev”
+require_once __DIR__ . '/init.php';
 
 if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'dev') {
     http_response_code(403);
@@ -175,7 +175,7 @@ $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
   </style>
 </head>
 <body>
-  <?php include __DIR__ . '/../navbar_d.php'; ?>
+  <?php include __DIR__ . '/navbar_d.php'; ?>
 
   <div class="container">
     <h1>Utenti Registrati</h1>

@@ -46,15 +46,15 @@ try {
 // 3) Calcolo dinamico della “base URL”
 //    Se stai servendo l’app in http://host/qualcosa/... prende “/qualcosa”
 //    altrimenti prende la stringa vuota.
-$script = $_SERVER['SCRIPT_NAME'];            // es. "/biosound/log/login.php"
+$script = $_SERVER['SCRIPT_NAME'];            // es. "././login.php"
 $parts  = explode('/', trim($script, '/'));   // ["biosound","log","login.php"]
 $base   = isset($parts[0]) ? '/'.$parts[0] : '';
 
 // 4) Redirect if not authenticated
 $current    = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 // definisci login/logout/home relativi a $base
-$loginURL   = $base . '/log/login.php';
-$logoutURL  = $base . '/log/logout.php';
+$loginURL   = $base . '/login.php';
+$logoutURL  = $base . '/logout.php';
 $homeURL    = $base . '/attivitae.php';
 
 if (empty($_SESSION['username'])) {

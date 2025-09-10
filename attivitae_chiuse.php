@@ -142,11 +142,11 @@ h1{text-align:center;margin-bottom:1rem;}
 
       <div class="actions">
         <!-- Visualizza: va alla pagina di dettaglio attivita_chiusa.php -->
-        <a class="icon-btn view-link" href="/biosound/attivita_chiusa.php?id=<?=urlencode($a['id'])?>" title="Visualizza">
+        <a class="icon-btn view-link" href="./attivita_chiusa.php?id=<?=urlencode($a['id'])?>" title="Visualizza">
           <i class="bi bi-eye"></i>
         </a>
         <!-- Riapri corso -->
-        <a href="/biosound/apri_corso.php?id=<?=urlencode($a['id'])?>"
+        <a href="./apri_corso.php?id=<?=urlencode($a['id'])?>"
            class="icon-btn"
            title="Riapri corso"
            onclick="return confirm('Sei sicuro di voler riaprire questa attività? Verranno rimossi gli attestati generati.');">

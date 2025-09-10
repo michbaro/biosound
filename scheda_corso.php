@@ -6,7 +6,7 @@ include __DIR__ . '/init.php';
 
 $id = $_GET['id'] ?? '';
 if (!$id) {
-    header('Location:/biosound/attivitae.php');
+    header('Location:./attivitae.php');
     exit;
 }
 
@@ -30,7 +30,7 @@ $stmt->execute([$id]);
 $act = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$act) {
-    header('Location:/biosound/attivitae.php');
+    header('Location:./attivitae.php');
     exit;
 }
 

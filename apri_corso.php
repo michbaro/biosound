@@ -17,7 +17,7 @@ function rrmdir_safe(string $dir): void {
 // ================= Parametri =================
 $id = $_GET['id'] ?? '';
 if ($id === '') {
-  header('Location: /biosound/attivitae.php');
+  header('Location: ./attivitae.php');
   exit;
 }
 
@@ -55,10 +55,10 @@ if (!isset($_GET['confirm'])) {
         inclusi i relativi PDF salvati a disco.
       </div>
       <div class="actions">
-        <a class="btn btn-secondary" href="/biosound/attivitae_chiuse.php">
+        <a class="btn btn-secondary" href="./attivitae_chiuse.php">
           <i class="bi bi-arrow-left"></i> Annulla
         </a>
-        <a class="btn btn-primary" href="/biosound/apri_corso.php?id=<?= urlencode($id) ?>&confirm=1">
+        <a class="btn btn-primary" href="./apri_corso.php?id=<?= urlencode($id) ?>&confirm=1">
           <i class="bi bi-unlock"></i> Sì, riapri ed elimina attestati
         </a>
       </div>
@@ -101,7 +101,7 @@ try {
     }
   }
 
-  header('Location: /biosound/attivitae.php?opened=1');
+  header('Location: ./attivitae.php?opened=1');
   exit;
 
 } catch (Throwable $e) {

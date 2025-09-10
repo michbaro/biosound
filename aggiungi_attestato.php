@@ -160,7 +160,7 @@ $stmt->execute([
 ]);
 
 
-      header('Location: /biosound/attestati.php?added=1');
+      header('Location: ./attestati.php?added=1');
       exit;
     }
   }
@@ -373,7 +373,7 @@ $stmt->execute([
 
       <!-- Azioni -->
       <div class="actions">
-        <a href="/biosound/attestati.php" class="btn btn-secondary">
+        <a href="./attestati.php" class="btn btn-secondary">
           <i class="bi bi-arrow-left"></i> Indietro
         </a>
         <button type="submit" class="btn btn-primary">

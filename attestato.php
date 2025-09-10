@@ -7,7 +7,7 @@ require_once __DIR__ . '/init.php';
    ======================= */
 $id = $_GET['id'] ?? '';
 if ($id === '') {
-  header('Location: /biosound/attestati.php');
+  header('Location: ./attestati.php');
   exit;
 }
 
@@ -61,7 +61,7 @@ SQL);
 $attStmt->execute([$id]);
 $att = $attStmt->fetch(PDO::FETCH_ASSOC);
 if (!$att) {
-  header('Location: /biosound/attestati.php?notfound=1');
+  header('Location: ./attestati.php?notfound=1');
   exit;
 }
 
@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete'])) {
     }
     @rmdir($dir);
   }
-  header('Location: /biosound/attestati.php?deleted=1');
+  header('Location: ./attestati.php?deleted=1');
   exit;
 }
 
@@ -210,7 +210,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete'])) {
         $id
       ]);
 
-      header('Location: /biosound/attestati.php?updated=1');
+      header('Location: ./attestati.php?updated=1');
       exit;
     }
   }
@@ -436,7 +436,7 @@ if (!is_array($existingFiles)) $existingFiles = [];
 
       <!-- Azioni -->
       <div class="actions">
-        <a href="/biosound/attestati.php" class="btn btn-secondary">
+        <a href="./attestati.php" class="btn btn-secondary">
           <i class="bi bi-arrow-left"></i> Indietro
         </a>
         <button type="submit" class="btn btn-primary">

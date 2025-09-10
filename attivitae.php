@@ -180,10 +180,10 @@ h1{text-align:center;margin-bottom:1rem;}
 
     <!-- Toolbar con Aggiungi + Attività Chiuse -->
     <div class="toolbar">
-      <a href="/biosound/aggiungi_attivita.php" class="btn">
+      <a href="./aggiungi_attivita.php" class="btn">
         <i class="bi bi-plus-lg"></i> Aggiungi Attività
       </a>
-      <a href="/biosound/attivitae_chiuse.php" class="btn btn-secondary" title="Vedi attività chiuse">
+      <a href="./attivitae_chiuse.php" class="btn btn-secondary" title="Vedi attività chiuse">
         <i class="bi bi-archive"></i> Attività chiuse
       </a>
     </div>
@@ -252,13 +252,13 @@ h1{text-align:center;margin-bottom:1rem;}
 
         <div class="actions">
           <!-- Chiudi corso -->
-          <a href="/biosound/chiudi_corso.php?id=<?=urlencode($a['id'])?>"
+          <a href="./chiudi_corso.php?id=<?=urlencode($a['id'])?>"
              class="icon-btn" title="Chiudi corso">
             <i class="bi bi-lock"></i>
           </a>
 
           <!-- Modifica -->
-          <a href="/biosound/attivita.php?id=<?=urlencode($a['id'])?>"
+          <a href="./attivita.php?id=<?=urlencode($a['id'])?>"
              class="icon-btn" title="Modifica">
             <i class="bi bi-pencil"></i>
           </a>
@@ -269,13 +269,13 @@ h1{text-align:center;margin-bottom:1rem;}
               <i class="bi bi-three-dots-vertical"></i>
             </button>
             <div class="menu-list" role="menu">
-              <a role="menuitem" href="/biosound/scarica_registro.php?id=<?=urlencode($a['id'])?>">
+              <a role="menuitem" href="./scarica_registro.php?id=<?=urlencode($a['id'])?>">
                 <i class="bi bi-journal-text"></i> Registro (PDF)
               </a>
-              <a role="menuitem" href="/biosound/scheda_corso.php?id=<?=urlencode($a['id'])?>">
+              <a role="menuitem" href="./scheda_corso.php?id=<?=urlencode($a['id'])?>">
                 <i class="bi bi-file-earmark-text"></i> Scheda corso
               </a>
-              <a role="menuitem" href="/biosound/iscrizione.php?id=<?=urlencode($a['id'])?>">
+              <a role="menuitem" href="./iscrizione.php?id=<?=urlencode($a['id'])?>">
                 <i class="bi bi-person-plus"></i> Iscrizioni
               </a>
             </div>

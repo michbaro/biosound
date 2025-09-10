@@ -179,7 +179,7 @@ SQL
       }
     }
 
-    header("Location: /biosound/attivita.php?id={$newId}&added=1");
+    header("Location: ./attivita.php?id={$newId}&added=1");
     exit;
 }
 }
@@ -476,7 +476,7 @@ SQL
 
       <!-- Azioni -->
       <div class="actions">
-        <a href="/biosound/attivitae.php" class="btn btn-secondary">
+        <a href="./attivitae.php" class="btn btn-secondary">
           <i class="bi bi-arrow-left"></i> Indietro
         </a>
         <button type="submit" name="update" class="btn btn-primary">

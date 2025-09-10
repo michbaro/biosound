@@ -87,7 +87,7 @@ $attachMap = [
 // 4) Recupera ID o redirect
 $id = $_GET['id'] ?? '';
 if (!$id) {
-  header('Location:/biosound/docenti.php');
+  header('Location:./docenti.php');
   exit;
 }
 
@@ -105,7 +105,7 @@ $stmt = $pdo->prepare("
 $stmt->execute([$id]);
 $docente = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$docente) {
-  header('Location:/biosound/docenti.php');
+  header('Location:./docenti.php');
   exit;
 }
 $allegati = json_decode($docente['allegati'], true) ?: [];
@@ -133,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete'])) {
     rrmdir(__DIR__ . "/resources/docenti/{$id}/");
     $pdo->prepare('DELETE FROM docentecategoria WHERE docente_id = ?')->execute([$id]);
     $pdo->prepare('DELETE FROM docente WHERE id = ?')->execute([$id]);
-    header('Location:/biosound/docenti.php');
+    header('Location:./docenti.php');
     exit;
   }
 }
@@ -200,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update'])) {
   }
 
   // dopo l’UPDATE, torniamo alla lista con toast di successo
-  header('Location: /biosound/docenti.php?updated=1');
+  header('Location: ./docenti.php?updated=1');
   exit;
 }
 
@@ -337,7 +337,7 @@ else                    include 'navbar.php';
         ?>
         <li data-index="<?=$i?>">
           <span class="file-name">
-            <a href="/biosound/<?=$path?>" target="_blank"><?=$name?></a>
+            <a href="./<?=$path?>" target="_blank"><?=$name?></a>
           </span>
           <span class="icons">
             <label for="rep<?=$i?>"><i class="bi bi-pencil-fill"></i></label>
@@ -357,7 +357,7 @@ else                    include 'navbar.php';
       <ul class="allegati" id="newList"></ul>
 
       <div class="actions">
-        <a href="/biosound/docenti.php" class="btn btn-secondary">
+        <a href="./docenti.php" class="btn btn-secondary">
           <i class="bi bi-arrow-left"></i> Indietro
         </a>
         <button type="submit" name="update" class="btn btn-primary">

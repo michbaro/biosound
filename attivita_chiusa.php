@@ -8,7 +8,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 $id = $_GET['id'] ?? null;
 if (!$id) {
-  header('Location: /biosound/attivitae_chiuse.php');
+  header('Location: ./attivitae_chiuse.php');
   exit;
 }
 
@@ -19,13 +19,13 @@ function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 function fmtDate($d){ if(!$d) return ''; $ts=strtotime($d); return $ts?date('d/m/Y',$ts):''; }
 function labelModalita($m){ return $m; } // già descrittiva in attivita.modalita
 
-// URL attestato: /biosound/resources/attestati/<attestato_id>/<stored>
+// URL attestato: ./resources/attestati/<attestato_id>/<stored>
 function attestato_url(?string $attestatoId, ?string $json) : ?string {
   if (!$attestatoId || !$json) return null;
   $arr = json_decode($json, true);
   if (!is_array($arr) || empty($arr[0]['stored'])) return null;
   $stored = $arr[0]['stored'];
-  return "/biosound/resources/attestati/{$attestatoId}/{$stored}";
+  return "./resources/attestati/{$attestatoId}/{$stored}";
 }
 
 // Trova i PDF scheda corso salvati in resources/scheda/<attivita_id>/, ordinati per mtime desc
@@ -36,7 +36,7 @@ function list_schede_pdf(string $attivitaId): array {
   // Ordina dal più recente
   usort($paths, function($a,$b){ return filemtime($b) <=> filemtime($a); });
   // Mappa in [url, name, size, mtime]
-  $baseUrl = "/biosound/resources/scheda/{$attivitaId}";
+  $baseUrl = "./resources/scheda/{$attivitaId}";
   $out = [];
   foreach ($paths as $p) {
     $out[] = [
@@ -70,7 +70,7 @@ SQL);
 $actStmt->execute([$id]);
 $act = $actStmt->fetch(PDO::FETCH_ASSOC);
 if (!$act) {
-  header('Location: /biosound/attivitae_chiuse.php?notfound=1');
+  header('Location: ./attivitae_chiuse.php?notfound=1');
   exit;
 }
 
@@ -210,10 +210,10 @@ foreach ($partecipanti as $p) {
         <span class="muted">Durata corso: <strong><?= (int)$act['corso_durata_ore'] ?></strong> ore</span>
       </div>
       <div class="actions">
-        <a href="/biosound/attivitae_chiuse.php" class="btn btn-grey"><i class="bi bi-arrow-left"></i> Indietro</a>
+        <a href="./attivitae_chiuse.php" class="btn btn-grey"><i class="bi bi-arrow-left"></i> Indietro</a>
 
         <?php if ($haAttestati): ?>
-          <a href="/biosound/download_attestati.php?id=<?= urlencode($id) ?>"
+          <a href="./download_attestati.php?id=<?= urlencode($id) ?>"
              class="btn btn-green" title="Scarica tutti gli attestati in un archivio ZIP">
             <i class="bi bi-download"></i> Scarica attestati (ZIP)
           </a>
@@ -223,7 +223,7 @@ foreach ($partecipanti as $p) {
           </a>
         <?php endif; ?>
 
-        <a href="/biosound/apri_corso.php?id=<?= urlencode($id) ?>"
+        <a href="./apri_corso.php?id=<?= urlencode($id) ?>"
            class="btn btn-green"
            onclick="return confirm('Riaprire il corso? Verranno rimossi gli attestati e l’attività tornerà modificabile.');">
           <i class="bi bi-unlock"></i> Riapri corso
@@ -374,7 +374,7 @@ foreach ($partecipanti as $p) {
   </div>
 
   <div class="card" style="display:flex;justify-content:flex-end">
-    <a href="/biosound/attivitae_chiuse.php" class="btn btn-grey">
+    <a href="./attivitae_chiuse.php" class="btn btn-grey">
       <i class="bi bi-arrow-left"></i> Torna all’elenco attività chiuse
     </a>
   </div>

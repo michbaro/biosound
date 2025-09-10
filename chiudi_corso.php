@@ -24,6 +24,14 @@ function clean_filename(string $s): string {
   $s = str_replace(' ', '_', $s);
   return preg_replace('/[^A-Za-z0-9_\-\.]/', '', $s) ?: 'file';
 }
+/** Converte testo in un "token" sicuro per filename: spazi -> underscore, rimuove caratteri non sicuri */
+function token_filename(string $s): string {
+  $s = preg_replace('/\s+/u', '_', (string)$s);                 // spazi → _
+  $s = preg_replace('/[^\p{L}\p{N}\.\-_]/u', '', $s) ?? '';     // solo lettere/numeri . - _
+  $s = preg_replace('/_+/', '_', $s);
+  $s = trim($s, '_');
+  return $s === '' ? 'file' : $s;
+}
 function pdf_text($s) {
   return iconv('UTF-8','CP1252//TRANSLIT//IGNORE',(string)$s);
 }
@@ -37,13 +45,26 @@ function expiry_from_today_years(int $years): string {
   $day = min($d, (int)$eom->format('j'));
   return (new DateTime())->setDate($targetYear, $m, $day)->setTime(0,0,0)->format('Y-m-d');
 }
+/** Genera il prossimo numero univoco YYMMProgressivo (progressivo 01,02,...) */
+function next_univoco(PDO $pdo): string {
+  $prefix = date('ym'); // YYMM
+  $st = $pdo->prepare("SELECT MAX(univoco) FROM attestato WHERE univoco LIKE ?");
+  $st->execute([$prefix.'%']);
+  $max = $st->fetchColumn();
+  $n = 1;
+  if ($max) {
+    $tail = substr($max, 4);      // parte progressiva dopo YYMM
+    $n = (int)$tail + 1;
+  }
+  return $prefix . str_pad((string)$n, 2, '0', STR_PAD_LEFT);
+}
 
 /* =======================
    Parametri
 ======================= */
 $id = $_GET['id'] ?? '';
 if ($id === '') {
-  header('Location: /biosound/attivitae.php');
+  header('Location: ./attivitae.php');
   exit;
 }
 
@@ -53,8 +74,9 @@ if ($id === '') {
 $attStmt = $pdo->prepare(<<<'SQL'
   SELECT
     a.id, a.corso_id, a.modalita, a.luogo, a.note, a.chiuso,
-    c.titolo AS corso_titolo,
-    COALESCE(c.durata,0) AS durata_ore,
+    c.titolo          AS corso_titolo,
+    c.nomeabbreviato  AS corso_nomeabbr,
+    COALESCE(c.durata,0)   AS durata_ore,
     COALESCE(c.validita,0) AS validita_anni,
     COALESCE(c.normativa,'') AS normativa
   FROM attivita a
@@ -64,7 +86,7 @@ SQL);
 $attStmt->execute([$id]);
 $att = $attStmt->fetch(PDO::FETCH_ASSOC);
 if (!$att) {
-  header('Location: /biosound/attivitae.php?notfound=1');
+  header('Location: ./attivitae.php?notfound=1');
   exit;
 }
 
@@ -94,12 +116,12 @@ $partStmt->execute([$id]);
 $partecipanti = $partStmt->fetchAll(PDO::FETCH_ASSOC);
 
 if (!$partecipanti) {
-  header('Location: /biosound/attivitae.php?closed=0&msg=nopartecipanti');
+  header('Location: ./attivitae.php?closed=0&msg=nopartecipanti');
   exit;
 }
 
 /* =======================
-   Template PDF
+   Template PDF attestato
 ======================= */
 $templatePdf = __DIR__ . '/resources/templates/template_attestato.pdf';
 if (!is_file($templatePdf)) {
@@ -148,12 +170,12 @@ if (!$isPost) {
       .mini-btn{margin-top:.35rem;border:0;border-radius:6px;padding:.25rem .5rem;font-size:.75rem;cursor:pointer;color:#fff;background:#2e7d32}
       .mini-btn:hover{opacity:.9}
 
-      /* Uploader moderno compatto — uguale a aggiungi_attestato.php (verde successo, minimal) */
+      /* Uploader moderno compatto (verde) */
       .dz{
         position:relative;border:2px dashed #cfd8dc;background:#fff;
         border-radius:8px;padding:1rem;text-align:center;
         transition:all .15s;box-shadow:0 2px 6px rgba(0,0,0,0.08);
-        min-height:100px;cursor:pointer; margin-top:1rem; /* spazio sopra */
+        min-height:100px;cursor:pointer; margin-top:1rem;
       }
       .dz:hover{border-color:var(--pri, #66bb6a);}
       .dz.dragover{border-color:var(--pri, #66bb6a);background:#eef8f0;}
@@ -325,7 +347,7 @@ if (!$isPost) {
           <p class="note">Le ore sono calcolate automaticamente dalla differenza tra orario di inizio e di fine per ogni data spuntata.</p>
 
           <div class="actions">
-            <a href="/biosound/attivitae.php" class="btn btn-sec"><i class="bi bi-arrow-left"></i> Annulla</a>
+            <a href="./attivitae.php" class="btn btn-sec"><i class="bi bi-arrow-left"></i> Annulla</a>
             <button type="submit" class="btn btn-pri"><i class="bi bi-check2-circle"></i> Conferma presenze e chiudi</button>
           </div>
         </form>
@@ -438,7 +460,7 @@ try {
   $lock->execute([$id]);
   if ((int)$lock->fetchColumn() === 1) {
     $pdo->rollBack();
-    header('Location: /biosound/attivitae_chiuse.php?closed=1&already=1');
+    header('Location: ./attivitae_chiuse.php?closed=1&already=1');
     exit;
   }
 
@@ -483,17 +505,12 @@ try {
   }
 
   // ===== Upload PDF scheda corso (opzionale) =====
-  // *** FIX: name corretto 'scheda_pdf' come nel form ***
   if (!empty($_FILES['scheda_pdf']) && is_array($_FILES['scheda_pdf']) && ($_FILES['scheda_pdf']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
     $f = $_FILES['scheda_pdf'];
-    // log minimale utile in caso di problemi
     error_log("[CHIUDI scheda] err=" . ($f['error'] ?? 'n/a') . " size=" . ($f['size'] ?? 'n/a') . " name=" . ($f['name'] ?? 'n/a') . " tmp=" . ($f['tmp_name'] ?? 'n/a'));
 
     if ($f['error'] === UPLOAD_ERR_OK && $f['size'] > 0) {
-      if ($f['size'] > 20 * 1024 * 1024) {
-        throw new RuntimeException('Il PDF della scheda supera i 20 MB.');
-      }
-      // MIME reale
+      if ($f['size'] > 20 * 1024 * 1024) throw new RuntimeException('Il PDF della scheda supera i 20 MB.');
       $mime = '';
       if (function_exists('finfo_open')) {
         $finfo = finfo_open(FILEINFO_MIME_TYPE);
@@ -501,21 +518,15 @@ try {
         if ($finfo) finfo_close($finfo);
       }
       $extOk = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION)) === 'pdf';
-      if (($mime && $mime !== 'application/pdf') || !$extOk) {
-        throw new RuntimeException('La scheda corso deve essere un PDF valido.');
-      }
+      if (($mime && $mime !== 'application/pdf') || !$extOk) throw new RuntimeException('La scheda corso deve essere un PDF valido.');
       $dir = __DIR__ . '/resources/scheda/' . $id;
-      if (!is_dir($dir)) {
-        if (!mkdir($dir, 0775, true) && !is_dir($dir)) {
-          throw new RuntimeException('Impossibile creare la cartella scheda corso.');
-        }
+      if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        throw new RuntimeException('Impossibile creare la cartella scheda corso.');
       }
       $ts = date('Ymd_His');
       $base = clean_filename(pathinfo($f['name'], PATHINFO_FILENAME));
       $dest = $dir . '/scheda_corso-' . $ts . '-' . $base . '.pdf';
-      if (!move_uploaded_file($f['tmp_name'], $dest)) {
-        throw new RuntimeException('Salvataggio del PDF scheda corso fallito.');
-      }
+      if (!move_uploaded_file($f['tmp_name'], $dest)) throw new RuntimeException('Salvataggio del PDF scheda corso fallito.');
       @chmod($dest, 0664);
       $savedScheda = $dest; // informativo
     } else {
@@ -561,6 +572,9 @@ SQL);
   $esStmt->execute([$id]);
   $esiti = [];
   while ($r = $esStmt->fetch(PDO::FETCH_ASSOC)) $esiti[$r['dipendente_id']] = $r;
+
+  // Transazione per calcolo e salvataggio univoco + insert attestati
+  $pdo->beginTransaction();
 
   foreach ($partecipanti as $p) {
     $dipId = $p['id'];
@@ -630,8 +644,20 @@ SQL);
     }
 
     $pdfBytes = $pdf->Output('S');
+
+    // === Filename richiesto: nomeabbreviato_Nome_Cognome_univoco.pdf ===
+    $abbr     = $att['corso_nomeabbr'] ?: 'corso';
+    $nomeTok  = token_filename($p['nome'] ?? 'Nome');
+    $cognTok  = token_filename($p['cognome'] ?? 'Cognome');
+    $abbrTok  = token_filename($abbr);
+
+    // Genera numero univoco (YYMMProgressivo) all'interno della transazione
+    $univoco = next_univoco($pdo);
+    $univTok = token_filename($univoco);
+
+    $filename = $abbrTok . '_' . $nomeTok . '_' . $cognTok . '_' . $univTok . '.pdf';
+
     $attestatoId = uuid16();
-    $filename = clean_filename($att['id']).'_'.clean_filename($p['codice_fiscale']).'_'.clean_filename($p['cognome']).'_'.clean_filename($p['nome']).'.pdf';
     $dir = __DIR__.'/resources/attestati/'.$attestatoId;
     if (!is_dir($dir)) mkdir($dir,0775,true);
     $pdfPath = $dir.'/'.$filename;
@@ -644,15 +670,29 @@ SQL);
       'mime'     => 'application/pdf',
     ]];
 
-    $ins = $pdo->prepare("INSERT INTO attestato (id,dipendente_id,corso_id,attivita_id,data_emissione,data_scadenza,note,allegati)
-                          VALUES (?,?,?,?,?,?,?,?)");
-    $ins->execute([$attestatoId,$dipId,$att['corso_id'],$att['id'],date('Y-m-d'),$scadenzaYmd,null,json_encode($filesMeta,JSON_UNESCAPED_UNICODE)]);
+    $ins = $pdo->prepare("INSERT INTO attestato
+      (id,dipendente_id,corso_id,attivita_id,data_emissione,data_scadenza,note,allegati,univoco)
+      VALUES (?,?,?,?,?,?,?,?,?)");
+    $ins->execute([
+      $attestatoId,
+      $dipId,
+      $att['corso_id'],
+      $att['id'],
+      date('Y-m-d'),
+      $scadenzaYmd,
+      null,
+      json_encode($filesMeta,JSON_UNESCAPED_UNICODE),
+      $univoco
+    ]);
   }
 
   // marca attività chiusa
   $pdo->prepare('UPDATE attivita SET chiuso=1 WHERE id=?')->execute([$id]);
 
+  $pdo->commit();
+
 } catch (Throwable $e) {
+  if ($pdo->inTransaction()) $pdo->rollBack();
   foreach ($written as $f) { if (is_file($f)) @unlink($f); }
   http_response_code(500);
   echo "<pre>Errore generazione attestati:\n".htmlspecialchars($e->getMessage(),ENT_QUOTES)."</pre>";
@@ -668,5 +708,5 @@ if (!empty($warn)) {
 if ($savedScheda) {
   $_SESSION['__scheda_saved__'] = basename($savedScheda);
 }
-header('Location: /biosound/attivitae_chiuse.php?closed=1');
+header('Location: ./attivitae_chiuse.php?closed=1');
 exit;

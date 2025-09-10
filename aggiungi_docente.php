@@ -114,7 +114,7 @@ SQL
                 }
             }
             // redirect immediato
-            header("Location: /biosound/docente.php?id=" . urlencode($id));
+            header("Location: ./docente.php?id=" . urlencode($id));
             exit;
         }
     }
@@ -265,7 +265,7 @@ else                       include 'navbar.php';
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-save"></i> Salva Docente
         </button>
-        <a href="/biosound/docenti.php" class="btn btn-secondary">
+        <a href="./docenti.php" class="btn btn-secondary">
           <i class="bi bi-x-lg"></i> Annulla
         </a>
       </div>
@@ -323,7 +323,7 @@ function updateRequired() {
     if (doc) {
       dynamicItems.push({
         label: doc.label,
-        file: `/biosound/resources/${doc.file}`
+        file: `./resources/${doc.file}`
       });
     }
   });

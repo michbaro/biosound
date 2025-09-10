@@ -4,14 +4,14 @@ include 'init.php';
 
 // 1) Autorizzazione: solo admin e dev
 if (($_SESSION['role'] ?? 'utente') === 'utente') {
-    header('Location: /biosound/index.php?unauthorized=1');
+    header('Location: ./index.php?unauthorized=1');
     exit;
 }
 
 // 2) ID operatore da GET
 $id = $_GET['id'] ?? '';
 if (!$id) {
-    header('Location: /biosound/operatori.php');
+    header('Location: ./operatori.php');
     exit;
 }
 
@@ -20,7 +20,7 @@ $stmt = $pdo->prepare('SELECT nome, cognome FROM operatore WHERE id = ?');
 $stmt->execute([$id]);
 $op = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$op) {
-    header('Location: /biosound/operatori.php');
+    header('Location: ./operatori.php');
     exit;
 }
 
@@ -31,7 +31,7 @@ $errorDuplicate = false;
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete'])) {
     $stmtDel = $pdo->prepare('DELETE FROM operatore WHERE id = ?');
     $stmtDel->execute([$id]);
-    header('Location: /biosound/operatori.php?deleted=1');
+    header('Location: ./operatori.php?deleted=1');
     exit;
 }
 
@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete'])) {
                  WHERE id = ?
             ');
             $upd->execute([$nome, $cognome, $id]);
-            header('Location: /biosound/operatori.php?updated=1');
+            header('Location: ./operatori.php?updated=1');
             exit;
         }
     }
@@ -237,7 +237,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['delete'])) {
       </div>
 
       <div class="actions">
-        <a href="/biosound/operatori.php" class="btn btn-secondary">
+        <a href="./operatori.php" class="btn btn-secondary">
           <i class="bi bi-arrow-left"></i> Annulla
         </a>
         <button type="submit" class="btn btn-primary">

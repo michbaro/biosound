@@ -268,12 +268,12 @@ $azienda_id=$_GET['azienda_id']??null; $sede_id=$_GET['sede_id']??null;
 if($sede_id){
   $stmt=$pdo->prepare("SELECT s.nome sede_nome, a.ragionesociale azienda_nome FROM sede s JOIN azienda a ON a.id=s.azienda_id WHERE s.id=?");
   $stmt->execute([$sede_id]); $row=$stmt->fetch(PDO::FETCH_ASSOC);
-  if(!$row){ header('Location:/biosound/aziende.php'); exit; }
+  if(!$row){ header('Location:./aziende.php'); exit; }
   $contextName="{$row['azienda_nome']} ({$row['sede_nome']})";
 }elseif($azienda_id){
   $stmt=$pdo->prepare("SELECT ragionesociale FROM azienda WHERE id=?");
   $stmt->execute([$azienda_id]); $nome=$stmt->fetchColumn();
-  if(!$nome){ header('Location:/biosound/aziende.php'); exit; }
+  if(!$nome){ header('Location:./aziende.php'); exit; }
   $contextName=$nome;
 }else $contextName='Tutti i dipendenti';
 
@@ -477,7 +477,7 @@ table.preview{border-collapse:collapse;width:100%;font-size:.95rem;border-radius
     <div class="head">
       <h3>Importa dipendenti (XLSX)</h3>
       <div>
-        <a class="btn btn-grey" href="/biosound/resources/templates/dipendenti_massivo.xlsx" download style="margin-right:.5rem"><i class="bi bi-download"></i> Template</a>
+        <a class="btn btn-grey" href="./resources/templates/dipendenti_massivo.xlsx" download style="margin-right:.5rem"><i class="bi bi-download"></i> Template</a>
         <button class="close" data-close>&times;</button>
       </div>
     </div>
@@ -701,7 +701,7 @@ function renderPreview(rows){
     fd.append('items', JSON.stringify(rows));
     const j=await (await fetch(location.href,{method:'POST',body:fd})).json();
     if(!j.ok){ alert(j.msg||'Errore tecnico: contatta l’amministrazione'); return; }
-    window.location.href='/biosound/dipendenti.php?bulk=ok';
+    window.location.href='./dipendenti.php?bulk=ok';
   });
 }
 function resetImportUI(){

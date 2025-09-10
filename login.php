@@ -1,8 +1,8 @@
 <?php
-// /var/www/formazione/biosound/log/login.php
+// /var/www/formazione././login.php
 
 // 1) Include init.php (sessione, security headers, PDO e redirect logic)
-require_once __DIR__ . '/../init.php';
+include 'init.php';
 
 // 2) Se sei già loggato, vai alla home
 if (!empty($_SESSION['username'])) {
@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['username'] = $user['username'];
                         $_SESSION['role']     = $user['role'];
             session_regenerate_id(true);
-            header('Location: /biosound/attivitae.php');
+            header('Location: ./attivitae.php');
             exit;
         }
         $error = 'Credenziali non valide.';
@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 </head>
 <body>
   <div class="login-box">
-    <img src="/biosound/logo.png" alt="Logo Biosound" class="logo">
+    <img src="./logo.png" alt="Logo Biosound" class="logo">
     <h3>Accedi a Biosound</h3>
 
     <?php if ($error): ?>

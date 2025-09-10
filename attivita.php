@@ -5,7 +5,7 @@ require_once __DIR__ . '/init.php';
 // 2) ID attività da modificare
 $id = $_GET['id'] ?? null;
 if (!$id) {
-    header('Location: /biosound/attivitae.php');
+    header('Location: ./attivitae.php');
     exit;
 }
 
@@ -14,7 +14,7 @@ $actStmt = $pdo->prepare('SELECT * FROM attivita WHERE id = ?');
 $actStmt->execute([$id]);
 $actData = $actStmt->fetch(PDO::FETCH_ASSOC);
 if (!$actData) {
-    header('Location: /biosound/attivitae.php?notfound=1');
+    header('Location: ./attivitae.php?notfound=1');
     exit;
 }
 
@@ -113,7 +113,7 @@ if (isset($_POST['delete'])) {
         ->execute([$id]);
 
     $pdo->commit();
-    header('Location: /biosound/attivitae.php?deleted=1');
+    header('Location: ./attivitae.php?deleted=1');
     exit;
 }
 // --- fine DELETE ---
@@ -217,7 +217,7 @@ $u->execute([
     }
 
     $pdo->commit();
-    header("Location: /biosound/attivita.php?id={$id}&updated=1");
+    header("Location: ./attivita.php?id={$id}&updated=1");
     exit;
 }
 ?>
@@ -549,7 +549,7 @@ $u->execute([
 
       <!-- Azioni -->
       <div class="actions">
-        <a href="/biosound/attivitae.php" class="btn btn-secondary">
+        <a href="./attivitae.php" class="btn btn-secondary">
           <i class="bi bi-arrow-left"></i> Indietro
         </a>
         <button type="submit" class="btn btn-primary">

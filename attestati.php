@@ -110,7 +110,7 @@ $attestati = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
   <?php if ($deleted): ?><div id="toast" class="alert-danger">Attestato eliminato con successo!</div><?php endif; ?>
 
   <div class="add-container">
-    <a href="/biosound/aggiungi_attestato.php" class="add-btn">
+    <a href="./aggiungi_attestato.php" class="add-btn">
       <i class="bi bi-plus-lg"></i> Aggiungi Attestato
     </a>
   </div>
@@ -184,7 +184,7 @@ $attestati = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
         &nbsp;•&nbsp;S: <?=$scad_display?>
       </div>
       <div class="actions">
-        <a class="icon-btn" href="/biosound/attestato.php?id=<?=urlencode($r['id'])?>" title="Modifica">
+        <a class="icon-btn" href="./attestato.php?id=<?=urlencode($r['id'])?>" title="Modifica">
           <i class="bi bi-pencil"></i>
         </a>
       </div>

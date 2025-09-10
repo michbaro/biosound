@@ -141,8 +141,8 @@ $username = htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES, 'UTF-8');
 
 <nav class="app-nav" role="navigation">
   <div class="nav-left">
-    <a href="/biosound/attivitae.php" class="nav-logo">
-      <img src="/biosound/logo.png" alt="Biosound Logo">
+    <a href="./attivitae.php" class="nav-logo">
+      <img src="./logo.png" alt="Biosound Logo">
     </a>
     <a></a>
         <a></a>
@@ -152,12 +152,12 @@ $username = htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES, 'UTF-8');
   </div>
 
   <div class="nav-center">
-    <a href="/biosound/docenti.php">Docenti</a>
-    <a href="/biosound/attivitae.php">Attività</a>
-    <a href="/biosound/corsi.php">Corsi</a>
-    <a href="/biosound/aziende.php">Aziende</a>
-    <a href="/biosound/dipendenti.php">Dipendenti</a>
-    <a href="/biosound/attestati.php">Attestati</a>
+    <a href="./docenti.php">Docenti</a>
+    <a href="./attivitae.php">Attività</a>
+    <a href="./corsi.php">Corsi</a>
+    <a href="./aziende.php">Aziende</a>
+    <a href="./dipendenti.php">Dipendenti</a>
+    <a href="./attestati.php">Attestati</a>
   </div>
 
   <div class="nav-right">
@@ -166,7 +166,7 @@ $username = htmlspecialchars($_SESSION['username'] ?? '', ENT_QUOTES, 'UTF-8');
       <span class="user-role">UTENTE</span>
     </div>
 
-    <form action="/biosound/log/logout.php" method="post">
+    <form action="././logout.php" method="post">
       <button type="submit" aria-label="Logout">
         <i class="bi bi-box-arrow-right"></i>
       </button>
