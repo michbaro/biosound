@@ -11,11 +11,21 @@ header('X-XSS-Protection: 1; mode=block');
 header('Strict-Transport-Security: max-age=31536000; includeSubDomains; preload');
 
 // 2) Connessione PDO
-define('DB_HOST',    '127.0.0.1'); // a
-define('DB_NAME',    'biosound');
-define('DB_USER',    'biosound_user');
-define('DB_PASS',    '4zV3kV#vyq@fmKP');
-define('DB_CHARSET', 'utf8mb4');
+if ($_SERVER['HTTP_HOST'] === 'localhost') {
+    // Sviluppo locale (XAMPP)
+    define('DB_HOST', '127.0.0.1');
+    define('DB_NAME', 'biosound');
+    define('DB_USER', 'root');
+    define('DB_PASS', '');
+    define('DB_CHARSET', 'utf8mb4');
+} else {
+    // Produzione
+    define('DB_HOST', '127.0.0.1');
+    define('DB_NAME', 'biosound');
+    define('DB_USER', 'biosound_user');
+    define('DB_PASS', '4zV3kV#vyq@fmKP');
+    define('DB_CHARSET', 'utf8mb4');
+}
 
 $dsn = sprintf(
     'mysql:host=%s;dbname=%s;charset=%s',

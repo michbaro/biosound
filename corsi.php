@@ -19,7 +19,7 @@ function modalita_to_flags($m){
   $m=(string)$m;
   return ['aula'=>($m==='1'||$m==='2'), 'fad'=>($m==='0'||$m==='2')];
 }
-
+//
 /* =================== DOWNLOAD PROGRAMMA (PDF) ===================
    Usa template_programma.html + dompdf se disponibile.
    Accetta POST con action=download_programma + dati correnti del form.
