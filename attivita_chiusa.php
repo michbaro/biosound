@@ -136,6 +136,17 @@ while ($r = $presStmt->fetch(PDO::FETCH_ASSOC)) {
 ========================= */
 $schede = list_schede_pdf($id);
 
+/* =========================
+   NUOVO: Verifica attestati disponibili per ZIP
+========================= */
+$haAttestati = false;
+foreach ($partecipanti as $p) {
+  if (!empty($p['attestato_id']) && !empty($p['attestato_allegati_json']) && (int)$p['superato'] === 1) {
+    $arr = json_decode($p['attestato_allegati_json'], true);
+    if (is_array($arr) && !empty($arr[0]['stored'])) { $haAttestati = true; break; }
+  }
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="it">
@@ -200,6 +211,18 @@ $schede = list_schede_pdf($id);
       </div>
       <div class="actions">
         <a href="/biosound/attivitae_chiuse.php" class="btn btn-grey"><i class="bi bi-arrow-left"></i> Indietro</a>
+
+        <?php if ($haAttestati): ?>
+          <a href="/biosound/download_attestati.php?id=<?= urlencode($id) ?>"
+             class="btn btn-green" title="Scarica tutti gli attestati in un archivio ZIP">
+            <i class="bi bi-download"></i> Scarica attestati (ZIP)
+          </a>
+        <?php else: ?>
+          <a class="btn btn-grey no-link" title="Nessun attestato disponibile" style="opacity:.6;pointer-events:none">
+            <i class="bi bi-download"></i> Scarica attestati (ZIP)
+          </a>
+        <?php endif; ?>
+
         <a href="/biosound/apri_corso.php?id=<?= urlencode($id) ?>"
            class="btn btn-green"
            onclick="return confirm('Riaprire il corso? Verranno rimossi gli attestati e l’attività tornerà modificabile.');">
